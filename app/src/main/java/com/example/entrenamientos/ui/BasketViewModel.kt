@@ -20,13 +20,15 @@ class BasketViewModel @Inject constructor(
     // --- ESTADOS Y MÉTODOS PARA HORARIOS DE ENTRENAMIENTO ---
     private val _schedules = MutableStateFlow<List<TrainingSchedule>>(emptyList())
     val schedules: StateFlow<List<TrainingSchedule>> = _schedules.asStateFlow()
+    // --- ESTADOS Y MÉTODOS PARA PARTIDOS ---
+    private val _matches = MutableStateFlow<List<Match>>(emptyList())
+    val matches: StateFlow<List<Match>> = _matches.asStateFlow()
 
     init {
         checkAndPopulateDefaultPlayers()
 
-        // Cargar horarios predeterminados si la base de datos está vacía y escuchar cambios
         viewModelScope.launch {
-            repository.getAllSchedules().collect { list ->
+            repository.getAllSchedules().collect { list: List<TrainingSchedule> ->
                 if (list.isEmpty()) {
                     val defaultSchedules = listOf(
                         TrainingSchedule(teamYear = 2018, dayOfWeek = 2, startTime = "17:00", endTime = "18:00"), // Martes
@@ -39,6 +41,12 @@ class BasketViewModel @Inject constructor(
                 } else {
                     _schedules.value = list
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            repository.getAllMatches().collect { list: List<Match> ->
+                _matches.value = list
             }
         }
     }
@@ -163,9 +171,8 @@ class BasketViewModel @Inject constructor(
         return parts[0].toIntOrNull()?.times(60)?.plus(parts[1].toIntOrNull() ?: 0) ?: 0
     }
 
-    // Devuelve si hay partido en esa fecha para pintar el icono azul
     fun hasMatchOnDate(date: java.time.LocalDate): Boolean {
-        return com.example.entrenamientos.domain.CalendarLogic.isInfantilMatchDay(date)
+        return _matches.value.any { it.date == date.toString() }
     }
 
     // --- ESTADOS Y MÉTODOS PARA ASISTENCIA ---
@@ -193,5 +200,13 @@ class BasketViewModel @Inject constructor(
     fun saveConvocatoria(date: String, selectedPlayerIds: Set<Long>, reasons: Map<Long, String>) {
         println("Convocatoria guardada para $date: $selectedPlayerIds")
         println("Motivos de ausencia: $reasons")
+    }
+
+    fun addOrUpdateMatch(match: Match) {
+        viewModelScope.launch { repository.insertMatch(match) }
+    }
+
+    fun deleteMatch(match: Match) {
+        viewModelScope.launch { repository.deleteMatch(match) }
     }
 }

@@ -529,11 +529,12 @@ fun StatsScreen(viewModel: BasketViewModel = hiltViewModel()) {
 
 @Composable
 fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
-    var activeTab by remember { mutableStateOf("JUGADORAS") } // "JUGADORAS" o "HORARIOS"
+    var activeTab by remember { mutableStateOf("JUGADORAS") } // "JUGADORAS", "HORARIOS" o "PARTIDOS"
     var selectedTeam by remember { mutableStateOf(2013) }
 
     val players by viewModel.getPlayersForTeam(selectedTeam).collectAsState(initial = emptyList())
     val allSchedules by viewModel.schedules.collectAsState()
+    val allMatches by viewModel.matches.collectAsState()
     val teamSchedules = allSchedules.filter { it.teamYear == selectedTeam }.sortedBy { it.dayOfWeek }
 
     // Estados Jugadoras
@@ -549,42 +550,60 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     var scheduleEndInput by remember { mutableStateOf("18:30") }
     var scheduleError by remember { mutableStateOf("") }
 
+    // Estados Partidos (WIZARD)
+    var showMatchDialog by remember { mutableStateOf(false) }
+    var matchStep by remember { mutableStateOf(1) }
+    var matchToEdit by remember { mutableStateOf<com.example.entrenamientos.data.Match?>(null) }
+    var matchDateInput by remember { mutableStateOf("2026-09-05") }
+    var matchTimeInput by remember { mutableStateOf("10:00") }
+    var matchIsLocalInput by remember { mutableStateOf(true) }
+    var matchLocationInput by remember { mutableStateOf("") }
+    var matchOpponentInput by remember { mutableStateOf("") }
+
     val daysOfWeek = listOf("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Ajustes de Equipo", style = MaterialTheme.typography.headlineMedium)
+        Text("Ajustes del Club", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Selector de Pestaña Principal
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+        // Selector de Pestañas
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             Button(
                 onClick = { activeTab = "JUGADORAS" },
-                colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "JUGADORAS") Color.DarkGray else Color.LightGray),
-                modifier = Modifier.padding(end = 8.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "JUGADORAS") Color.DarkGray else Color.LightGray)
             ) { Text("Jugadoras", color = if (activeTab == "JUGADORAS") Color.White else Color.Black) }
 
             Button(
                 onClick = { activeTab = "HORARIOS" },
                 colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "HORARIOS") Color.DarkGray else Color.LightGray)
             ) { Text("Horarios", color = if (activeTab == "HORARIOS") Color.White else Color.Black) }
+
+            Button(
+                onClick = { activeTab = "PARTIDOS" },
+                colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "PARTIDOS") com.example.entrenamientos.ui.theme.InfantilBlue else Color.LightGray)
+            ) { Text("Partidos", color = if (activeTab == "PARTIDOS") Color.White else Color.Black) }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Selector de Equipo
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            Button(
-                onClick = { selectedTeam = 2018 },
-                colors = ButtonDefaults.buttonColors(containerColor = if (selectedTeam == 2018) PrebenjaminPink else Color.Gray)
-            ) { Text("Prebenjamines") }
+        // Selector de Equipo (Oculto en Partidos, porque solo aplica a Infantiles)
+        if (activeTab != "PARTIDOS") {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Button(
+                    onClick = { selectedTeam = 2018 },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (selectedTeam == 2018) com.example.entrenamientos.ui.theme.PrebenjaminPink else Color.Gray)
+                ) { Text("Prebenjamines") }
 
-            Button(
-                onClick = { selectedTeam = 2013 },
-                colors = ButtonDefaults.buttonColors(containerColor = if (selectedTeam == 2013) InfantilBlue else Color.Gray)
-            ) { Text("Infantiles") }
+                Button(
+                    onClick = { selectedTeam = 2013 },
+                    colors = ButtonDefaults.buttonColors(containerColor = if (selectedTeam == 2013) com.example.entrenamientos.ui.theme.InfantilBlue else Color.Gray)
+                ) { Text("Infantiles") }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        } else {
+            Text("Gestión de Partidos (Infantiles 2013)", style = MaterialTheme.typography.labelMedium, color = com.example.entrenamientos.ui.theme.InfantilBlue, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp))
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
 
         if (activeTab == "JUGADORAS") {
             LazyColumn(modifier = Modifier.weight(1f)) {
@@ -608,7 +627,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
             ) { Text("Añadir Nueva Jugadora", color = Color.Black) }
 
-        } else {
+        } else if (activeTab == "HORARIOS") {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(teamSchedules) { schedule ->
                     Row(
@@ -639,25 +658,58 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 },
                 modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
             ) { Text("Añadir Horario", color = Color.Black) }
+
+        } else {
+            // PESTAÑA PARTIDOS
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(allMatches) { match ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(text = "${match.date} a las ${match.time}", style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            Text(text = "vs ${match.opponent} (${if (match.isLocal) "Local" else "Visitante"})", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Row {
+                            IconButton(onClick = {
+                                matchToEdit = match; matchStep = 1
+                                matchDateInput = match.date; matchTimeInput = match.time
+                                matchIsLocalInput = match.isLocal; matchLocationInput = match.location; matchOpponentInput = match.opponent
+                                showMatchDialog = true
+                            }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
+                            IconButton(onClick = { viewModel.deleteMatch(match) }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    matchToEdit = null; matchStep = 1; matchDateInput = "2026-09-05"; matchTimeInput = "10:00"
+                    matchIsLocalInput = true; matchLocationInput = ""; matchOpponentInput = ""
+                    showMatchDialog = true
+                },
+                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+            ) { Text("Añadir Partido", color = Color.Black) }
         }
     }
 
-    // Diálogos omitidos para que el código no sea tan largo (aquí están las lógicas de guardado)
+    // Diálogos de Jugadoras y Horarios (Mantenidos igual)
     if (showPlayerDialog) {
         AlertDialog(
             onDismissRequest = { showPlayerDialog = false },
             title = { Text(if (playerToEdit == null) "Añadir Jugadora" else "Editar Jugadora") },
             text = { OutlinedTextField(value = playerNameInput, onValueChange = { playerNameInput = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
             confirmButton = {
-                Button(
-                    onClick = {
-                        if (playerNameInput.isNotBlank()) {
-                            if (playerToEdit == null) viewModel.addPlayer(playerNameInput, selectedTeam)
-                            else viewModel.updatePlayer(playerToEdit!!.copy(name = playerNameInput))
-                            showPlayerDialog = false
-                        }
-                    }, colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                ) { Text("Guardar", color = Color.Black) }
+                Button(onClick = {
+                    if (playerNameInput.isNotBlank()) {
+                        if (playerToEdit == null) viewModel.addPlayer(playerNameInput, selectedTeam)
+                        else viewModel.updatePlayer(playerToEdit!!.copy(name = playerNameInput))
+                        showPlayerDialog = false
+                    }
+                }, colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Guardar", color = Color.Black) }
             },
             dismissButton = { TextButton(onClick = { showPlayerDialog = false }) { Text("Cancelar", color = Color.Gray) } }
         )
@@ -669,38 +721,134 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
             title = { Text(if (scheduleToEdit == null) "Nuevo Horario" else "Editar Horario") },
             text = {
                 Column {
-                    if (scheduleError.isNotEmpty()) {
-                        Text(text = scheduleError, color = com.example.entrenamientos.ui.theme.AttendanceRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp))
-                    }
+                    if (scheduleError.isNotEmpty()) { Text(text = scheduleError, color = com.example.entrenamientos.ui.theme.AttendanceRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp)) }
                     Text("Día de la semana:", style = MaterialTheme.typography.labelSmall)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Button(onClick = { if (scheduleDayInput > 1) scheduleDayInput-- }) { Text("-") }
+                        Button(onClick = { if (scheduleDayInput > 1) scheduleDayInput-- else scheduleDayInput = 5 }) { Text("-") }
                         Text("${daysOfWeek[scheduleDayInput - 1]}", modifier = Modifier.align(Alignment.CenterVertically))
-                        Button(onClick = { if (scheduleDayInput < 7) scheduleDayInput++ }) { Text("+") }
+                        Button(onClick = { if (scheduleDayInput < 5) scheduleDayInput++ else scheduleDayInput = 1 }) { Text("+") }
                     }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    androidx.compose.material3.OutlinedButton(onClick = {
+                        val parts = scheduleStartInput.split(":"); val h = parts.getOrNull(0)?.toIntOrNull() ?: 17; val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                        android.app.TimePickerDialog(context, { _, hour, minute -> scheduleStartInput = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute) }, h, m, true).show()
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Hora Inicio: $scheduleStartInput", color = Color.Black) }
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = scheduleStartInput, onValueChange = { scheduleStartInput = it }, label = { Text("Hora Inicio (HH:MM)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = scheduleEndInput, onValueChange = { scheduleEndInput = it }, label = { Text("Hora Fin (HH:MM)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    androidx.compose.material3.OutlinedButton(onClick = {
+                        val parts = scheduleEndInput.split(":"); val h = parts.getOrNull(0)?.toIntOrNull() ?: 18; val m = parts.getOrNull(1)?.toIntOrNull() ?: 30
+                        android.app.TimePickerDialog(context, { _, hour, minute -> scheduleEndInput = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute) }, h, m, true).show()
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Hora Fin: $scheduleEndInput", color = Color.Black) }
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val formatRegex = "^([01]?\\d|2[0-3]):[0-5]\\d$".toRegex()
-                        if (!scheduleStartInput.matches(formatRegex) || !scheduleEndInput.matches(formatRegex)) {
-                            scheduleError = "Formato incorrecto. Usa HH:MM (ej. 17:30)"
-                            return@Button
-                        }
-
-                        val newSchedule = com.example.entrenamientos.data.TrainingSchedule(
-                            id = scheduleToEdit?.id ?: 0, teamYear = selectedTeam, dayOfWeek = scheduleDayInput, startTime = scheduleStartInput, endTime = scheduleEndInput
-                        )
-                        viewModel.addOrUpdateSchedule(newSchedule, onSuccess = { showScheduleDialog = false }, onError = { errorMsg -> scheduleError = errorMsg })
-                    }, colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                ) { Text("Guardar", color = Color.Black) }
+                Button(onClick = {
+                    val newSchedule = com.example.entrenamientos.data.TrainingSchedule(id = scheduleToEdit?.id ?: 0, teamYear = selectedTeam, dayOfWeek = scheduleDayInput, startTime = scheduleStartInput, endTime = scheduleEndInput)
+                    viewModel.addOrUpdateSchedule(newSchedule, onSuccess = { showScheduleDialog = false }, onError = { errorMsg -> scheduleError = errorMsg })
+                }, colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Guardar", color = Color.Black) }
             },
             dismissButton = { TextButton(onClick = { showScheduleDialog = false }) { Text("Cancelar", color = Color.Gray) } }
+        )
+    }
+
+    // WIZARD DE PARTIDOS
+    if (showMatchDialog) {
+        AlertDialog(
+            onDismissRequest = { showMatchDialog = false },
+            title = { Text(if (matchToEdit == null) "Nuevo Partido - Paso $matchStep/4" else "Editar Partido - Paso $matchStep/4") },
+            text = {
+                Column {
+                    when (matchStep) {
+                        1 -> {
+                            Text("Selecciona la fecha:", style = MaterialTheme.typography.labelMedium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = {
+                                    val parts = matchDateInput.split("-")
+                                    val y = parts.getOrNull(0)?.toIntOrNull() ?: 2026
+                                    val m = (parts.getOrNull(1)?.toIntOrNull() ?: 9) - 1
+                                    val d = parts.getOrNull(2)?.toIntOrNull() ?: 1
+
+                                    val dpd = android.app.DatePickerDialog(context, { _, year, month, day ->
+                                        matchDateInput = String.format(java.util.Locale.getDefault(), "%04d-%02d-%02d", year, month + 1, day)
+                                    }, y, m, d)
+
+                                    val minCal = java.util.Calendar.getInstance().apply { set(2026, 8, 1) }
+                                    dpd.datePicker.minDate = minCal.timeInMillis
+
+                                    val maxCal = java.util.Calendar.getInstance().apply { set(2027, 4, 31) }
+                                    dpd.datePicker.maxDate = maxCal.timeInMillis
+
+                                    dpd.show()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(matchDateInput, color = Color.Black)
+                            }
+                        }
+                        2 -> {
+                            Text("Selecciona la hora:", style = MaterialTheme.typography.labelMedium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = {
+                                    val parts = matchTimeInput.split(":")
+                                    val h = parts.getOrNull(0)?.toIntOrNull() ?: 10
+                                    val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                                    android.app.TimePickerDialog(context, { _, hour, minute ->
+                                        matchTimeInput = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute)
+                                    }, h, m, true).show()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(matchTimeInput, color = Color.Black)
+                            }
+                        }
+                        3 -> {
+                            Text("¿Dónde se juega?", style = MaterialTheme.typography.labelMedium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                Button(
+                                    onClick = { matchIsLocalInput = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (matchIsLocalInput) com.example.entrenamientos.ui.theme.InfantilBlue else Color.Gray)
+                                ) { Text("Local") }
+                                Button(
+                                    onClick = { matchIsLocalInput = false },
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (!matchIsLocalInput) com.example.entrenamientos.ui.theme.InfantilBlue else Color.Gray)
+                                ) { Text("Visitante") }
+                            }
+                        }
+                        4 -> {
+                            OutlinedTextField(value = matchLocationInput, onValueChange = { matchLocationInput = it }, label = { Text("Polideportivo") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(value = matchOpponentInput, onValueChange = { matchOpponentInput = it }, label = { Text("Equipo Rival") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (matchStep < 4) {
+                    Button(onClick = { matchStep++ }, colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue)) { Text("Siguiente") }
+                } else {
+                    Button(
+                        onClick = {
+                            val newMatch = com.example.entrenamientos.data.Match(
+                                id = matchToEdit?.id ?: 0, date = matchDateInput, time = matchTimeInput,
+                                isLocal = matchIsLocalInput, location = matchLocationInput, opponent = matchOpponentInput
+                            )
+                            viewModel.addOrUpdateMatch(newMatch)
+                            showMatchDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                    ) { Text("Guardar", color = Color.Black) }
+                }
+            },
+            dismissButton = {
+                Row {
+                    if (matchStep > 1) {
+                        TextButton(onClick = { matchStep-- }) { Text("Atrás", color = Color.Gray) }
+                    }
+                    TextButton(onClick = { showMatchDialog = false }) { Text("Cancelar", color = Color.Gray) }
+                }
+            }
         )
     }
 }

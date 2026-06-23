@@ -1,13 +1,10 @@
 package com.example.entrenamientos.di
 
-import android.content.Context
-import androidx.room.Room
 import com.example.entrenamientos.data.AppDao
 import com.example.entrenamientos.data.AppDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -16,13 +13,15 @@ import javax.inject.Singleton
 object AppModule {
 
     @Provides
-    @Singleton
-    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
-        return Room.databaseBuilder(
+    @javax.inject.Singleton
+    fun provideDatabase(@dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context): com.example.entrenamientos.data.AppDatabase {
+        return androidx.room.Room.databaseBuilder(
             context,
-            AppDatabase::class.java,
-            "basket_manager_db"
-        ).build()
+            com.example.entrenamientos.data.AppDatabase::class.java,
+            "entrenamientos_database"
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides

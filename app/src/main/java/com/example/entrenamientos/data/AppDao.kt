@@ -1,6 +1,7 @@
 package com.example.entrenamientos.data
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -9,24 +10,28 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AppDao {
-    // Players
+
+    // --- PLAYERS ---
     @Query("SELECT * FROM players WHERE teamYear = :year")
     fun getPlayersByTeam(year: Int): Flow<List<Player>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlayer(player: Player)
 
-    @Query("DELETE FROM players WHERE id = :playerId")
-    suspend fun deletePlayer(playerId: Long)
+    @Update
+    suspend fun updatePlayer(player: Player)
 
-    // Attendance
+    @Delete
+    suspend fun deletePlayer(player: Player)
+
+    // --- ATTENDANCE ---
     @Query("SELECT * FROM attendances WHERE date = :date AND teamYear = :year")
     fun getAttendanceByDateAndTeam(date: String, year: Int): Flow<List<Attendance>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAttendances(attendances: List<Attendance>)
 
-    // Matches
+    // --- MATCHES ---
     @Query("SELECT * FROM matches ORDER BY date ASC")
     fun getAllMatches(): Flow<List<Match>>
 
@@ -36,25 +41,23 @@ interface AppDao {
     @Update
     suspend fun updateMatch(match: Match)
 
-    // Training Notes
+    @Delete
+    suspend fun deleteMatch(match: Match)
+
+    // --- TRAINING NOTES ---
     @Query("SELECT * FROM training_notes WHERE date = :date AND teamYear = :year")
     fun getNotesByDateAndTeam(date: String, year: Int): Flow<List<TrainingNote>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrainingNote(note: TrainingNote)
 
-    @androidx.room.Update
-    suspend fun updatePlayer(player: Player)
+    // --- TRAINING SCHEDULES ---
+    @Query("SELECT * FROM training_schedules")
+    fun getAllSchedules(): Flow<List<TrainingSchedule>>
 
-    @androidx.room.Delete
-    suspend fun deletePlayer(player: Player)
-
-    @androidx.room.Query("SELECT * FROM training_schedules")
-    fun getAllSchedules(): kotlinx.coroutines.flow.Flow<List<TrainingSchedule>>
-
-    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSchedule(schedule: TrainingSchedule)
 
-    @androidx.room.Delete
+    @Delete
     suspend fun deleteSchedule(schedule: TrainingSchedule)
 }
