@@ -35,30 +35,35 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+
+    // Activación necesaria de Jetpack Compose
+    buildFeatures {
+        compose = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.1"
+    }
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)
     implementation(libs.androidx.activity)
-    implementation(libs.androidx.constraintlayout)
-    implementation(libs.androidx.room.common.jvm)
-    implementation(libs.androidx.room.runtime.android)
-    implementation(libs.androidx.espresso.core)
-    implementation(libs.androidx.foundation.layout.android)
-    implementation(libs.androidx.navigation.common.android)
-    implementation(libs.androidx.material3.android)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
 
+    // Jetpack Compose UI & Material 3
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.material3)
+    implementation(libs.androidx.material.icons.extended)
+
+    // Navegación
+    implementation(libs.navigation.compose)
+
+    // Base de Datos (Room)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    kapt(libs.room.compiler)
+
+    // Inyección de Dependencias (Hilt)
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
-
-    implementation(libs.navigation.compose)
     implementation(libs.hilt.navigation.compose)
-
-    implementation(libs.androidx.material.icons.extended)
 }
