@@ -60,9 +60,15 @@ fun AppNavigation() {
             startDestination = Screen.Calendar.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(Screen.Calendar.route) { Text("Pantalla del Calendario") }
-            composable(Screen.Stats.route) { Text("Pantalla de Estadísticas") }
-            composable(Screen.Settings.route) { Text("Pantalla de Configuración") }
+            composable(Screen.Calendar.route) {
+                com.example.entrenamientos.ui.screens.CalendarScreen()
+            }
+            composable(Screen.Stats.route) {
+                com.example.entrenamientos.ui.screens.StatsScreen()
+            }
+            composable(Screen.Settings.route) {
+                com.example.entrenamientos.ui.screens.SettingsScreen()
+            }
         }
     }
 }

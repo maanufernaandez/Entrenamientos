@@ -49,10 +49,16 @@ dependencies {
     implementation(libs.androidx.espresso.core)
     implementation(libs.androidx.foundation.layout.android)
     implementation(libs.androidx.navigation.common.android)
+    implementation(libs.androidx.material3.android)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
+
+    implementation(libs.navigation.compose)
+    implementation(libs.hilt.navigation.compose)
+
+    implementation(libs.androidx.material.icons.extended)
 }
