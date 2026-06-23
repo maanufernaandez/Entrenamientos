@@ -42,4 +42,19 @@ interface AppDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrainingNote(note: TrainingNote)
+
+    @androidx.room.Update
+    suspend fun updatePlayer(player: Player)
+
+    @androidx.room.Delete
+    suspend fun deletePlayer(player: Player)
+
+    @androidx.room.Query("SELECT * FROM training_schedules")
+    fun getAllSchedules(): kotlinx.coroutines.flow.Flow<List<TrainingSchedule>>
+
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun insertSchedule(schedule: TrainingSchedule)
+
+    @androidx.room.Delete
+    suspend fun deleteSchedule(schedule: TrainingSchedule)
 }

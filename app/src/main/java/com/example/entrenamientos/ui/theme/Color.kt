@@ -4,9 +4,10 @@ import androidx.compose.ui.graphics.Color
 
 val PrebenjaminPink = Color(0xFFFF80AB)
 val InfantilBlue = Color(0xFF2196F3)
-val AttendanceGreen = Color(0xFFC8E6C9)
-val AttendanceYellow = Color(0xFFFFF9C4)
-val AttendanceRed = Color(0xFFFFCDD2)
+
+val AttendanceGreen = Color(0xFF4CAF50)  // Verde fuerte
+val AttendanceYellow = Color(0xFFFFEB3B) // Amarillo brillante
+val AttendanceRed = Color(0xFFF44336)    // Rojo intenso
 
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)

@@ -55,19 +55,33 @@ fun AppNavigation() {
             }
         }
     ) { innerPadding ->
+
+        val sharedViewModel: com.example.entrenamientos.ui.BasketViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+
         NavHost(
             navController = navController,
             startDestination = Screen.Calendar.route,
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Calendar.route) {
-                com.example.entrenamientos.ui.screens.CalendarScreen()
+                com.example.entrenamientos.ui.screens.CalendarScreen(viewModel = sharedViewModel, navController = navController)
             }
             composable(Screen.Stats.route) {
-                com.example.entrenamientos.ui.screens.StatsScreen()
+                com.example.entrenamientos.ui.screens.StatsScreen(viewModel = sharedViewModel)
             }
             composable(Screen.Settings.route) {
-                com.example.entrenamientos.ui.screens.SettingsScreen()
+                com.example.entrenamientos.ui.screens.SettingsScreen(viewModel = sharedViewModel)
+            }
+            composable("attendance") {
+                com.example.entrenamientos.ui.screens.AttendanceScreen(viewModel = sharedViewModel, navController = navController)
+            }
+            composable("notes/{type}") { backStackEntry ->
+                val type = backStackEntry.arguments?.getString("type") ?: "ENTRENAMIENTO"
+                com.example.entrenamientos.ui.screens.TrainingNoteScreen(viewModel = sharedViewModel, navController = navController, noteType = type)
+            }
+            // Nueva ruta para la convocatoria
+            composable("convocatoria") {
+                com.example.entrenamientos.ui.screens.ConvocatoriaScreen(viewModel = sharedViewModel, navController = navController)
             }
         }
     }

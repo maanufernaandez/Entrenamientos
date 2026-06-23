@@ -25,4 +25,22 @@ class AppRepository @Inject constructor(
     // Notas de Entrenamiento
     fun getTrainingNotes(date: String, teamYear: Int): Flow<List<TrainingNote>> = dao.getNotesByDateAndTeam(date, teamYear)
     suspend fun saveTrainingNote(note: TrainingNote) = dao.insertTrainingNote(note)
+
+    suspend fun updatePlayer(player: Player) {
+        dao.updatePlayer(player)
+    }
+
+    suspend fun deletePlayer(player: Player) {
+        dao.deletePlayer(player)
+    }
+
+    fun getAllSchedules() = dao.getAllSchedules()
+
+    suspend fun insertSchedule(schedule: com.example.entrenamientos.data.TrainingSchedule) {
+        dao.insertSchedule(schedule)
+    }
+
+    suspend fun deleteSchedule(schedule: com.example.entrenamientos.data.TrainingSchedule) {
+        dao.deleteSchedule(schedule)
+    }
 }
