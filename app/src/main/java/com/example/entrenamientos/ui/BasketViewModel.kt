@@ -9,11 +9,45 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 
 @HiltViewModel
 class BasketViewModel @Inject constructor(
     private val repository: AppRepository
 ) : ViewModel() {
+
+    // Esto se ejecuta automáticamente al iniciar el ViewModel
+    init {
+        checkAndPopulateDefaultPlayers()
+    }
+
+    private fun checkAndPopulateDefaultPlayers() {
+        viewModelScope.launch {
+            // Comprobamos los prebenjamines
+            val currentPrebenjamines = repository.getPlayers(2018).first()
+            if (currentPrebenjamines.isEmpty()) {
+                val defaultPrebenjamines = listOf(
+                    "Jericó", "Andrea", "Silvia", "Daniela", "Carlos", "Jaqueline",
+                    "Emma", "Vega", "Lara", "Crismeily", "Martina", "Izan"
+                )
+                defaultPrebenjamines.forEach { name ->
+                    repository.addPlayer(Player(name = name, teamYear = 2018))
+                }
+            }
+
+            // Comprobamos las infantiles
+            val currentInfantiles = repository.getPlayers(2013).first()
+            if (currentInfantiles.isEmpty()) {
+                val defaultInfantiles = listOf(
+                    "Mayte", "Martina", "Maria", "Nahia", "Leire", "Tania",
+                    "Aitana", "Wiktoria", "Saioa", "Alba", "Arianna", "Paula", "Salome"
+                )
+                defaultInfantiles.forEach { name ->
+                    repository.addPlayer(Player(name = name, teamYear = 2013))
+                }
+            }
+        }
+    }
 
     // Estado básico para la fecha seleccionada en el calendario
     private val _selectedDate = MutableStateFlow("2026-09-01")
@@ -39,5 +73,15 @@ class BasketViewModel @Inject constructor(
         viewModelScope.launch {
             repository.saveTrainingNote(TrainingNote(date = date, teamYear = teamYear, noteType = type, content = content))
         }
+    }
+
+    // Devuelve qué equipos entrenan en una fecha concreta para pintar las franjas
+    fun getTeamsForDate(date: java.time.LocalDate): List<Int> {
+        return com.example.entrenamientos.domain.CalendarLogic.getTrainingTeams(date)
+    }
+
+    // Devuelve si hay partido en esa fecha para pintar el icono azul
+    fun hasMatchOnDate(date: java.time.LocalDate): Boolean {
+        return com.example.entrenamientos.domain.CalendarLogic.isInfantilMatchDay(date)
     }
 }
