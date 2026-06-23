@@ -79,9 +79,12 @@ fun AppNavigation() {
                 val type = backStackEntry.arguments?.getString("type") ?: "ENTRENAMIENTO"
                 com.example.entrenamientos.ui.screens.TrainingNoteScreen(viewModel = sharedViewModel, navController = navController, noteType = type)
             }
-            // Nueva ruta para la convocatoria
+            // Rutas añadidas
             composable("convocatoria") {
                 com.example.entrenamientos.ui.screens.ConvocatoriaScreen(viewModel = sharedViewModel, navController = navController)
+            }
+            composable("resultado") {
+                com.example.entrenamientos.ui.screens.ResultadoScreen(viewModel = sharedViewModel, navController = navController)
             }
         }
     }

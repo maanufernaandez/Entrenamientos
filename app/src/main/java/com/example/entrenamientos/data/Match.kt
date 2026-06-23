@@ -10,5 +10,10 @@ data class Match(
     val time: String,
     val isLocal: Boolean,
     val location: String,
-    val opponent: String
+    val opponent: String,
+    val resultLocal: Int? = null,
+    val resultVisitor: Int? = null,
+    val ftMade: Int = 0,
+    val ftAttempted: Int = 0,
+    val isConvocatoriaSaved: Boolean = false
 )

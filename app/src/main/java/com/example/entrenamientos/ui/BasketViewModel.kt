@@ -1,5 +1,6 @@
 package com.example.entrenamientos.ui
 
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.entrenamientos.data.*
@@ -31,11 +32,14 @@ class BasketViewModel @Inject constructor(
             repository.getAllSchedules().collect { list: List<TrainingSchedule> ->
                 if (list.isEmpty()) {
                     val defaultSchedules = listOf(
-                        TrainingSchedule(teamYear = 2018, dayOfWeek = 2, startTime = "17:00", endTime = "18:00"), // Martes
-                        TrainingSchedule(teamYear = 2018, dayOfWeek = 4, startTime = "17:00", endTime = "18:00"), // Jueves
-                        TrainingSchedule(teamYear = 2013, dayOfWeek = 1, startTime = "18:00", endTime = "19:30"), // Lunes
-                        TrainingSchedule(teamYear = 2013, dayOfWeek = 4, startTime = "18:00", endTime = "19:30"), // Jueves
-                        TrainingSchedule(teamYear = 2013, dayOfWeek = 5, startTime = "18:00", endTime = "19:30")  // Viernes
+                        // Prebenjamines (2018): Martes y Jueves 16:30 - 17:45
+                        TrainingSchedule(teamYear = 2018, dayOfWeek = 2, startTime = "16:30", endTime = "17:45"),
+                        TrainingSchedule(teamYear = 2018, dayOfWeek = 4, startTime = "16:30", endTime = "17:45"),
+
+                        // Infantiles (2013): Lunes y Jueves 19:00 - 20:15, Viernes 17:45 - 19:00
+                        TrainingSchedule(teamYear = 2013, dayOfWeek = 1, startTime = "19:00", endTime = "20:15"),
+                        TrainingSchedule(teamYear = 2013, dayOfWeek = 4, startTime = "19:00", endTime = "20:15"),
+                        TrainingSchedule(teamYear = 2013, dayOfWeek = 5, startTime = "17:45", endTime = "19:00")
                     )
                     defaultSchedules.forEach { repository.insertSchedule(it) }
                 } else {
@@ -208,5 +212,25 @@ class BasketViewModel @Inject constructor(
 
     fun deleteMatch(match: Match) {
         viewModelScope.launch { repository.deleteMatch(match) }
+    }
+
+    fun getMatchForDate(date: java.time.LocalDate): Match? = _matches.value.find { it.date == date.toString() }
+
+    fun getMatchColor(match: Match): Color {
+        if (match.resultLocal == null || match.resultVisitor == null) {
+            return com.example.entrenamientos.ui.theme.InfantilBlue
+        }
+
+        if (match.resultLocal == match.resultVisitor) {
+            return Color.Gray
+        }
+
+        val hasWon = if (match.isLocal) {
+            match.resultLocal > match.resultVisitor
+        } else {
+            match.resultVisitor > match.resultLocal
+        }
+
+        return if (hasWon) com.example.entrenamientos.ui.theme.SuccessGreen else Color.Red
     }
 }

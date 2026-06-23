@@ -51,11 +51,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.entrenamientos.ui.BasketViewModel
 import com.example.entrenamientos.ui.theme.InfantilBlue
-import com.example.entrenamientos.ui.theme.PrebenjaminPink
-import java.time.LocalDate
-import java.time.YearMonth
-import java.time.format.TextStyle
-import java.util.Locale
 
 val PrebenjaminPink = Color(0xFFFF80AB)
 val InfantilBlue = Color(0xFF2196F3)
@@ -63,25 +58,25 @@ val InfantilBlue = Color(0xFF2196F3)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(viewModel: BasketViewModel = hiltViewModel(), navController: androidx.navigation.NavController) {
-    var currentMonth by remember { mutableStateOf(YearMonth.of(2026, 9)) }
-    val minMonth = YearMonth.of(2026, 9)
-    val maxMonth = YearMonth.of(2027, 5)
+    var currentMonth by remember { mutableStateOf(java.time.YearMonth.of(2026, 9)) }
+    val minMonth = java.time.YearMonth.of(2026, 9)
+    val maxMonth = java.time.YearMonth.of(2027, 5)
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBottomSheet by remember { mutableStateOf(false) }
     val selectedDateStr by viewModel.selectedDate.collectAsState()
-    val selectedDate = LocalDate.parse(selectedDateStr)
+
+    // 1. Observamos los cambios en los horarios
+    val schedules by viewModel.schedules.collectAsState()
+    val selectedDate = java.time.LocalDate.parse(selectedDateStr)
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        // ... (Tu código de botones de mes, se mantiene igual)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { currentMonth = currentMonth.minusMonths(1) }, enabled = currentMonth.isAfter(minMonth)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Mes anterior")
             }
-            Text("${currentMonth.month.getDisplayName(TextStyle.FULL, Locale("es", "ES")).uppercase()} ${currentMonth.year}", style = MaterialTheme.typography.titleLarge)
+            Text("${currentMonth.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).uppercase()} ${currentMonth.year}", style = MaterialTheme.typography.titleLarge)
             IconButton(onClick = { currentMonth = currentMonth.plusMonths(1) }, enabled = currentMonth.isBefore(maxMonth)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Mes siguiente")
             }
@@ -94,17 +89,12 @@ fun CalendarScreen(viewModel: BasketViewModel = hiltViewModel(), navController: 
         }
         Spacer(modifier = Modifier.height(8.dp))
 
-        val days = mutableListOf<LocalDate?>()
+        val days = mutableListOf<java.time.LocalDate?>()
         val firstDayOfWeek = currentMonth.atDay(1).dayOfWeek.value
         for (i in 1 until firstDayOfWeek) days.add(null)
         for (i in 1..currentMonth.lengthOfMonth()) days.add(currentMonth.atDay(i))
+        while (days.size % 7 != 0) days.add(null)
 
-        // Rellenamos con nulos al final para que la cuadrícula siempre sea perfecta (múltiplo de 7)
-        while (days.size % 7 != 0) {
-            days.add(null)
-        }
-
-        // Cuadrícula flexible que se estira para ocupar el 100% de la pantalla restante
         Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
             val weeks = days.chunked(7)
             weeks.forEach { week ->
@@ -115,6 +105,7 @@ fun CalendarScreen(viewModel: BasketViewModel = hiltViewModel(), navController: 
                                 DayCell(
                                     date = date,
                                     viewModel = viewModel,
+                                    schedules = schedules, // Pasamos los horarios observados
                                     onClick = {
                                         viewModel.setSelectedDate(date.toString())
                                         if (viewModel.getTeamsForDate(date).isNotEmpty() || viewModel.hasMatchOnDate(date)) {
@@ -122,8 +113,6 @@ fun CalendarScreen(viewModel: BasketViewModel = hiltViewModel(), navController: 
                                         }
                                     }
                                 )
-                            } else {
-                                Spacer(modifier = Modifier.fillMaxSize().padding(2.dp))
                             }
                         }
                     }
@@ -133,92 +122,84 @@ fun CalendarScreen(viewModel: BasketViewModel = hiltViewModel(), navController: 
     }
 
     if (showBottomSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showBottomSheet = false },
-            sheetState = sheetState
-        ) {
-            DayOptionsMenu(
-                date = selectedDate,
-                viewModel = viewModel,
-                navController = navController,
-                onClose = { showBottomSheet = false }
-            )
+        ModalBottomSheet(onDismissRequest = { showBottomSheet = false }, sheetState = sheetState) {
+            DayOptionsMenu(date = selectedDate, viewModel = viewModel, navController = navController, onClose = { showBottomSheet = false })
         }
     }
 }
 
 @Composable
-fun DayCell(date: LocalDate, viewModel: BasketViewModel, onClick: () -> Unit) {
-    val teams = viewModel.getTeamsForDate(date)
-    val hasMatch = viewModel.hasMatchOnDate(date)
+fun DayCell(date: java.time.LocalDate, viewModel: BasketViewModel, schedules: List<com.example.entrenamientos.data.TrainingSchedule>, onClick: () -> Unit) {
+    val dayValue = date.dayOfWeek.value
+    val teams = schedules.filter { it.dayOfWeek == dayValue }.map { it.teamYear }.distinct()
+
+    // Obtenemos el partido para ver si es Local o Visitante
+    val match = viewModel.getMatchForDate(date)
 
     Box(
         modifier = Modifier
-            .fillMaxSize() // Ahora se estira ocupando todo el espacio disponible
+            .fillMaxSize()
             .padding(2.dp)
             .background(Color.White, shape = MaterialTheme.shapes.small)
             .clickable { onClick() }
             .padding(4.dp)
     ) {
-        // Número del día y el círculo del partido fijados arriba
-        Row(
-            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = date.dayOfMonth.toString(),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            if (hasMatch) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(InfantilBlue)
-                )
-            }
-        }
+        // Número del día (arriba a la izquierda)
+        Text(
+            text = date.dayOfMonth.toString(),
+            modifier = Modifier.align(Alignment.TopStart),
+            style = MaterialTheme.typography.bodyMedium
+        )
 
-        // Franjas de los equipos centradas perfectamente en el cuadrado
+        // Columna contenedora central
         Column(
             modifier = Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // Círculo azul central con L o V
+            if (match != null) {
+                val circleColor = viewModel.getMatchColor(match)
+
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(circleColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (match.isLocal) "L" else "V",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            // Franjas de entrenamiento (Más grandes y centradas)
             if (teams.contains(2018)) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(20.dp) // Franja más ancha
-                        .background(PrebenjaminPink, shape = MaterialTheme.shapes.extraSmall),
-                    contentAlignment = Alignment.Center // Centrado vertical y horizontal del texto
+                        .fillMaxWidth(0.95f) // Más ancho
+                        .height(26.dp)       // Más alto
+                        .background(com.example.entrenamientos.ui.theme.PrebenjaminPink, shape = MaterialTheme.shapes.extraSmall),
+                    contentAlignment = Alignment.Center // CENTRA EL TEXTO
                 ) {
-                    Text(
-                        text = "2018",
-                        color = Color.White,
-                        fontSize = 12.sp, // Letra más grande
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold // En negrita para que se lea claro
-                    )
+                    Text("2018", color = Color.White, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
             }
-
             if (teams.contains(2013)) {
-                if (teams.contains(2018)) {
-                    Spacer(modifier = Modifier.height(4.dp)) // Espacio de separación si coinciden los dos
-                }
+                if (teams.contains(2018)) Spacer(modifier = Modifier.height(2.dp))
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(20.dp) // Franja más ancha
-                        .background(InfantilBlue, shape = MaterialTheme.shapes.extraSmall),
-                    contentAlignment = Alignment.Center // Centrado vertical y horizontal del texto
+                        .fillMaxWidth(0.95f) // Más ancho
+                        .height(26.dp)       // Más alto
+                        .background(com.example.entrenamientos.ui.theme.InfantilBlue, shape = MaterialTheme.shapes.extraSmall),
+                    contentAlignment = Alignment.Center // CENTRA EL TEXTO
                 ) {
-                    Text(
-                        text = "2013",
-                        color = Color.White,
-                        fontSize = 12.sp, // Letra más grande
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold // En negrita para que se lea claro
-                    )
+                    Text("2013", color = Color.White, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
             }
         }
@@ -226,12 +207,18 @@ fun DayCell(date: LocalDate, viewModel: BasketViewModel, onClick: () -> Unit) {
 }
 
 @Composable
-fun DayOptionsMenu(date: LocalDate, viewModel: BasketViewModel, navController: androidx.navigation.NavController, onClose: () -> Unit) {
+fun DayOptionsMenu(
+    date: java.time.LocalDate,
+    viewModel: BasketViewModel,
+    navController: androidx.navigation.NavController,
+    onClose: () -> Unit
+) {
     val teams = viewModel.getTeamsForDate(date)
-    val hasMatch = viewModel.hasMatchOnDate(date)
+    val match = viewModel.getMatchForDate(date)
+    val hasMatch = match != null
 
-    val dayOfWeek = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale("es", "ES")).replaceFirstChar { it.uppercase() }
-    val monthName = date.month.getDisplayName(TextStyle.FULL, Locale("es", "ES"))
+    val dayOfWeek = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+    val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
 
     Column(
         modifier = Modifier
@@ -240,11 +227,12 @@ fun DayOptionsMenu(date: LocalDate, viewModel: BasketViewModel, navController: a
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Entrenamientos $dayOfWeek ${date.dayOfMonth} de $monthName",
+            text = "Opciones para el $dayOfWeek ${date.dayOfMonth} de $monthName",
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
+        // --- ENTRENAMIENTOS ---
         if (teams.isNotEmpty()) {
             teams.forEach { teamYear ->
                 val teamName = if (teamYear == 2018) "Prebenjamines (2018)" else "Infantiles (2013)"
@@ -252,53 +240,54 @@ fun DayOptionsMenu(date: LocalDate, viewModel: BasketViewModel, navController: a
 
                 Text(teamName, style = MaterialTheme.typography.bodyMedium, color = teamColor, modifier = Modifier.padding(top = 8.dp))
 
+                // Aquí añadimos los 3 botones: Entrenamiento, Asistencia y Notas
                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Button(
-                        onClick = {
-                            viewModel.setSelectedTeamYear(teamYear)
-                            onClose()
-                            navController.navigate("notes/ENTRENAMIENTO")
-                        },
+                        onClick = { viewModel.setSelectedTeamYear(teamYear); onClose(); navController.navigate("notes/ENTRENAMIENTO") },
                         colors = ButtonDefaults.buttonColors(containerColor = teamColor)
                     ) { Text("Entrenamiento", color = Color.White) }
 
                     Button(
-                        onClick = {
-                            viewModel.setSelectedTeamYear(teamYear)
-                            onClose()
-                            navController.navigate("attendance")
-                        },
+                        onClick = { viewModel.setSelectedTeamYear(teamYear); onClose(); navController.navigate("attendance") },
                         colors = ButtonDefaults.buttonColors(containerColor = teamColor)
                     ) { Text("Asistencia", color = Color.White) }
 
                     Button(
-                        onClick = {
-                            viewModel.setSelectedTeamYear(teamYear)
-                            onClose()
-                            navController.navigate("notes/OTROS")
-                        },
+                        onClick = { viewModel.setSelectedTeamYear(teamYear); onClose(); navController.navigate("notes/OTROS") },
                         colors = ButtonDefaults.buttonColors(containerColor = teamColor)
                     ) { Text("Notas", color = Color.White) }
                 }
             }
         }
 
-        if (hasMatch) {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        // --- PARTIDOS ---
+        if (hasMatch && match != null) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
             Text("Partido (Infantiles)", style = MaterialTheme.typography.labelLarge, color = com.example.entrenamientos.ui.theme.InfantilBlue)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Button(onClick = { /* Editar hora */ }, colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue)) { Text("Hora") }
+            Spacer(modifier = Modifier.height(12.dp))
 
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Button(
                     onClick = {
+                        viewModel.setSelectedDate(date.toString())
                         onClose()
                         navController.navigate("convocatoria")
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue)
-                ) { Text("Convocatoria") }
+                ) {
+                    Text(if (match.isConvocatoriaSaved) "Ver Convocatoria" else "Convocatoria")
+                }
 
-                Button(onClick = { /* Resultado */ }, colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue)) { Text("Resultado") }
+                Button(
+                    onClick = {
+                        viewModel.setSelectedDate(date.toString())
+                        onClose()
+                        navController.navigate("resultado")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue)
+                ) {
+                    Text(if (match.resultLocal != null) "Ver Resultado" else "Resultado")
+                }
             }
         }
     }
@@ -481,6 +470,94 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
 }
 
 @Composable
+fun ResultadoScreen(viewModel: BasketViewModel, navController: androidx.navigation.NavController) {
+    val selectedDateStr by viewModel.selectedDate.collectAsState()
+    val date = java.time.LocalDate.parse(selectedDateStr)
+    val match = viewModel.getMatchForDate(date) ?: return // Si no hay partido, salimos
+
+    // Estados para los campos de texto
+    var resLocal by remember { mutableStateOf(match.resultLocal?.toString() ?: "") }
+    var resVisitor by remember { mutableStateOf(match.resultVisitor?.toString() ?: "") }
+    var ftMade by remember { mutableStateOf(match.ftMade.toString()) }
+    var ftAttempted by remember { mutableStateOf(match.ftAttempted.toString()) }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Resultado del Partido", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Marcador
+        Text("Marcador Final", style = MaterialTheme.typography.titleMedium)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = resLocal,
+                onValueChange = { resLocal = it },
+                label = { Text("Local") },
+                modifier = Modifier.weight(1f),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = resVisitor,
+                onValueChange = { resVisitor = it },
+                label = { Text("Visitante") },
+                modifier = Modifier.weight(1f),
+                singleLine = true
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Tiros Libres
+        Text("Tiros Libres", style = MaterialTheme.typography.titleMedium)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = ftMade,
+                onValueChange = { ftMade = it },
+                label = { Text("Convertidos") },
+                modifier = Modifier.weight(1f),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = ftAttempted,
+                onValueChange = { ftAttempted = it },
+                label = { Text("Intentados") },
+                modifier = Modifier.weight(1f),
+                singleLine = true
+            )
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Button(
+            onClick = {
+                val localScore = resLocal.toIntOrNull()
+                val visitorScore = resVisitor.toIntOrNull()
+
+                if (localScore != null && visitorScore != null && localScore == visitorScore) {
+                    android.widget.Toast.makeText(
+                        navController.context,
+                        "El resultado no puede ser empate",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    val updatedMatch = match.copy(
+                        resultLocal = localScore,
+                        resultVisitor = visitorScore,
+                        ftMade = ftMade.toIntOrNull() ?: 0,
+                        ftAttempted = ftAttempted.toIntOrNull() ?: 0
+                    )
+                    viewModel.addOrUpdateMatch(updatedMatch)
+                    navController.popBackStack()
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+        ) {
+            Text(if (match.resultLocal != null) "Actualizar Resultado" else "Guardar Resultado", color = Color.Black)
+        }
+    }
+}
+
+@Composable
 fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navController: androidx.navigation.NavController, noteType: String) {
     val dateStr by viewModel.selectedDate.collectAsState()
     val teamYear by viewModel.selectedTeamYear.collectAsState()
@@ -554,7 +631,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     var showMatchDialog by remember { mutableStateOf(false) }
     var matchStep by remember { mutableStateOf(1) }
     var matchToEdit by remember { mutableStateOf<com.example.entrenamientos.data.Match?>(null) }
-    var matchDateInput by remember { mutableStateOf("2026-09-05") }
+    var matchDateInput by remember { mutableStateOf("05-09-2026") }
     var matchTimeInput by remember { mutableStateOf("10:00") }
     var matchIsLocalInput by remember { mutableStateOf(true) }
     var matchLocationInput by remember { mutableStateOf("") }
@@ -564,7 +641,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Ajustes del Club", style = MaterialTheme.typography.headlineMedium)
+        Text("Ajustes", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(16.dp))
 
         // Selector de Pestañas
@@ -587,7 +664,6 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Selector de Equipo (Oculto en Partidos, porque solo aplica a Infantiles)
         if (activeTab != "PARTIDOS") {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Button(
@@ -661,25 +737,56 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
 
         } else {
             // PESTAÑA PARTIDOS
+            // PESTAÑA PARTIDOS
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(allMatches) { match ->
+                    val dateObj = java.time.LocalDate.parse(match.date)
+                    val dayOfWeekName = dateObj.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+                    val monthName = dateObj.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .background(Color.LightGray.copy(alpha = 0.2f))
+                            .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
-                            Text(text = "${match.date} a las ${match.time}", style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                            Text(text = "vs ${match.opponent} (${if (match.isLocal) "Local" else "Visitante"})", style = MaterialTheme.typography.bodyMedium)
+                        Column(modifier = Modifier.weight(1f)) {
+                            // 1ª Línea: Fecha y hora
+                            Text(
+                                text = "$dayOfWeekName ${dateObj.dayOfMonth} de $monthName - ${match.time}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                            )
+                            // 2ª Línea: Polideportivo
+                            Text(
+                                text = "Polideportivo ${match.location}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            // 3ª Línea: Equipos
+                            Text(
+                                text = if (match.isLocal) "Huerto - ${match.opponent}" else "${match.opponent} - Huerto",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                         }
+
+                        // Botones de acción (Editar / Eliminar)
                         Row {
                             IconButton(onClick = {
                                 matchToEdit = match; matchStep = 1
-                                matchDateInput = match.date; matchTimeInput = match.time
+                                val parts = match.date.split("-")
+                                matchDateInput = "${parts[2]}-${parts[1]}-${parts[0]}"
+                                matchTimeInput = match.time
                                 matchIsLocalInput = match.isLocal; matchLocationInput = match.location; matchOpponentInput = match.opponent
                                 showMatchDialog = true
                             }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
-                            IconButton(onClick = { viewModel.deleteMatch(match) }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+
+                            IconButton(onClick = { viewModel.deleteMatch(match) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
+                            }
                         }
                     }
                 }
@@ -687,7 +794,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = {
-                    matchToEdit = null; matchStep = 1; matchDateInput = "2026-09-05"; matchTimeInput = "10:00"
+                    matchToEdit = null; matchStep = 1; matchDateInput = "05-09-2026"; matchTimeInput = "10:00"
                     matchIsLocalInput = true; matchLocationInput = ""; matchOpponentInput = ""
                     showMatchDialog = true
                 },
@@ -763,13 +870,15 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                             Spacer(modifier = Modifier.height(8.dp))
                             androidx.compose.material3.OutlinedButton(
                                 onClick = {
+                                    // Parseamos el formato dd-mm-aaaa para abrir el calendario
                                     val parts = matchDateInput.split("-")
-                                    val y = parts.getOrNull(0)?.toIntOrNull() ?: 2026
+                                    val d = parts.getOrNull(0)?.toIntOrNull() ?: 5
                                     val m = (parts.getOrNull(1)?.toIntOrNull() ?: 9) - 1
-                                    val d = parts.getOrNull(2)?.toIntOrNull() ?: 1
+                                    val y = parts.getOrNull(2)?.toIntOrNull() ?: 2026
 
                                     val dpd = android.app.DatePickerDialog(context, { _, year, month, day ->
-                                        matchDateInput = String.format(java.util.Locale.getDefault(), "%04d-%02d-%02d", year, month + 1, day)
+                                        // Guardamos con formato dd-mm-aaaa
+                                        matchDateInput = String.format(java.util.Locale.getDefault(), "%02d-%02d-%04d", day, month + 1, year)
                                     }, y, m, d)
 
                                     val minCal = java.util.Calendar.getInstance().apply { set(2026, 8, 1) }
@@ -830,9 +939,17 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 } else {
                     Button(
                         onClick = {
+                            // Invertimos dd-mm-aaaa a aaaa-mm-dd para guardar en BD
+                            val parts = matchDateInput.split("-")
+                            val dateForDb = "${parts[2]}-${parts[1]}-${parts[0]}"
+
                             val newMatch = com.example.entrenamientos.data.Match(
-                                id = matchToEdit?.id ?: 0, date = matchDateInput, time = matchTimeInput,
-                                isLocal = matchIsLocalInput, location = matchLocationInput, opponent = matchOpponentInput
+                                id = matchToEdit?.id ?: 0,
+                                date = dateForDb,
+                                time = matchTimeInput,
+                                isLocal = matchIsLocalInput,
+                                location = matchLocationInput,
+                                opponent = matchOpponentInput
                             )
                             viewModel.addOrUpdateMatch(newMatch)
                             showMatchDialog = false
