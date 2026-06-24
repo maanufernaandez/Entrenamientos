@@ -13,18 +13,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,10 +55,37 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.entrenamientos.ui.BasketViewModel
-import com.example.entrenamientos.ui.theme.InfantilBlue
 
 val PrebenjaminPink = Color(0xFFFF80AB)
 val InfantilBlue = Color(0xFF2196F3)
+
+@Composable
+fun SplashScreen(navController: androidx.navigation.NavController) {
+    // Efecto para esperar 2 segundos y luego saltar al calendario
+    androidx.compose.runtime.LaunchedEffect(key1 = true) {
+        kotlinx.coroutines.delay(2000) // 2000 milisegundos = 2 segundos
+        navController.navigate("calendar") {
+            // Esto evita que al darle a "Atrás" en el móvil, vuelva a la pantalla de carga
+            popUpTo("splash") { inclusive = true }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White), // Si el fondo de tu logo no es blanco, cambia este color
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(id = com.example.entrenamientos.R.drawable.logo),
+            contentDescription = "Logo de la App",
+            modifier = Modifier
+                .size(250.dp) // Tamaño del logo en la pantalla de carga
+                .clip(androidx.compose.foundation.shape.CircleShape), // Esto fuerza a que la imagen sea un círculo perfecto
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,75 +162,59 @@ fun CalendarScreen(viewModel: BasketViewModel = hiltViewModel(), navController: 
 
 @Composable
 fun DayCell(date: java.time.LocalDate, viewModel: BasketViewModel, schedules: List<com.example.entrenamientos.data.TrainingSchedule>, onClick: () -> Unit) {
+    val isHoliday = viewModel.isHoliday(date)
     val dayValue = date.dayOfWeek.value
-    val teams = schedules.filter { it.dayOfWeek == dayValue }.map { it.teamYear }.distinct()
+    // Si es festivo, las franjas desaparecen dinámicamente porque teams estará vacío
+    val teams = if (isHoliday) emptyList() else schedules.filter { it.dayOfWeek == dayValue }.map { it.teamYear }.distinct()
 
-    // Obtenemos el partido para ver si es Local o Visitante
     val match = viewModel.getMatchForDate(date)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(2.dp)
-            .background(Color.White, shape = MaterialTheme.shapes.small)
+            .background(if (isHoliday) Color(0xFFFFEBEE) else Color.White, shape = MaterialTheme.shapes.small) // Fondo rojizo si es festivo
             .clickable { onClick() }
             .padding(4.dp)
     ) {
-        // Número del día (arriba a la izquierda)
+        // Número del día en Rojo si es Festivo
         Text(
             text = date.dayOfMonth.toString(),
             modifier = Modifier.align(Alignment.TopStart),
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (isHoliday) Color.Red else Color.Unspecified,
+            fontWeight = if (isHoliday) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal
         )
 
-        // Columna contenedora central
         Column(
             modifier = Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Círculo azul central con L o V
+            // Círculo del partido
             if (match != null) {
                 val circleColor = viewModel.getMatchColor(match)
-
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .clip(CircleShape)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
                         .background(circleColor),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (match.isLocal) "L" else "V",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                    )
+                    Text(text = if (match.isLocal) "L" else "V", color = Color.White, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            // Franjas de entrenamiento (Más grandes y centradas)
+            // Franjas de entrenamiento (Automáticamente ocultas si isHoliday == true)
             if (teams.contains(2018)) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.95f) // Más ancho
-                        .height(26.dp)       // Más alto
-                        .background(com.example.entrenamientos.ui.theme.PrebenjaminPink, shape = MaterialTheme.shapes.extraSmall),
-                    contentAlignment = Alignment.Center // CENTRA EL TEXTO
-                ) {
+                Box(modifier = Modifier.fillMaxWidth(0.95f).height(26.dp).background(com.example.entrenamientos.ui.theme.PrebenjaminPink, shape = MaterialTheme.shapes.extraSmall), contentAlignment = Alignment.Center) {
                     Text("2018", color = Color.White, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
             }
             if (teams.contains(2013)) {
                 if (teams.contains(2018)) Spacer(modifier = Modifier.height(2.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.95f) // Más ancho
-                        .height(26.dp)       // Más alto
-                        .background(com.example.entrenamientos.ui.theme.InfantilBlue, shape = MaterialTheme.shapes.extraSmall),
-                    contentAlignment = Alignment.Center // CENTRA EL TEXTO
-                ) {
+                Box(modifier = Modifier.fillMaxWidth(0.95f).height(26.dp).background(com.example.entrenamientos.ui.theme.InfantilBlue, shape = MaterialTheme.shapes.extraSmall), contentAlignment = Alignment.Center) {
                     Text("2013", color = Color.White, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 }
             }
@@ -240,7 +256,6 @@ fun DayOptionsMenu(
 
                 Text(teamName, style = MaterialTheme.typography.bodyMedium, color = teamColor, modifier = Modifier.padding(top = 8.dp))
 
-                // Aquí añadimos los 3 botones: Entrenamiento, Asistencia y Notas
                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                     Button(
                         onClick = { viewModel.setSelectedTeamYear(teamYear); onClose(); navController.navigate("notes/ENTRENAMIENTO") },
@@ -284,7 +299,12 @@ fun DayOptionsMenu(
                         onClose()
                         navController.navigate("resultado")
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue)
+                    enabled = match.isConvocatoriaSaved, // <-- LÓGICA DE BLOQUEO AQUÍ
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = com.example.entrenamientos.ui.theme.InfantilBlue,
+                        disabledContainerColor = Color.LightGray, // Color de fondo cuando está bloqueado
+                        disabledContentColor = Color.DarkGray // Color del texto cuando está bloqueado
+                    )
                 ) {
                     Text(if (match.resultLocal != null) "Ver Resultado" else "Resultado")
                 }
@@ -369,102 +389,155 @@ fun AttendanceScreen(viewModel: BasketViewModel = hiltViewModel(), navController
 }
 
 @Composable
-fun ConvocatoriaScreen(viewModel: BasketViewModel = hiltViewModel(), navController: androidx.navigation.NavController) {
-    val dateStr by viewModel.selectedDate.collectAsState()
-    // Las infantiles siempre son de la categoría 2013
-    val players by viewModel.getPlayersForTeam(2013).collectAsState(initial = emptyList())
+fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: androidx.navigation.NavController) {
+    val selectedDateStr by viewModel.selectedDate.collectAsState()
+    val date = java.time.LocalDate.parse(selectedDateStr)
+    val match = viewModel.getMatchForDate(date) ?: return
 
-    var step by remember { mutableStateOf(1) }
-    val selectedPlayerIds = remember { androidx.compose.runtime.mutableStateListOf<Long>() }
-    val reasons = remember { androidx.compose.runtime.mutableStateMapOf<Long, String>() }
+    val players by viewModel.getPlayersForTeam(2013).collectAsState(initial = emptyList())
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var isEditMode by remember { mutableStateOf(!match.isConvocatoriaSaved) }
+    var summonedIds by remember { mutableStateOf(match.summonedPlayers.toSet()) }
+    var reasonsMap by remember { mutableStateOf(match.unsummonedReasons.toMutableMap()) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(text = "Convocatoria Infantiles", style = MaterialTheme.typography.headlineMedium, color = InfantilBlue)
-        Text(text = "Partido: $dateStr", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+        Text(if (isEditMode) "Crear/Editar Convocatoria" else "Convocatoria Oficial", style = MaterialTheme.typography.headlineMedium)
+        Text("vs ${match.opponent} - ${match.date}", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (step == 1) {
-            // --- PASO 1: Selección de jugadoras (Mínimo 8, Máximo 12) ---
-            Text("Selecciona entre 8 y 12 jugadoras:", style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = "Seleccionadas: ${selectedPlayerIds.size}",
-                color = if (selectedPlayerIds.size in 8..12) com.example.entrenamientos.ui.theme.AttendanceGreen else com.example.entrenamientos.ui.theme.AttendanceRed
-            )
+        if (!isEditMode) {
+            val convocadas = players.filter { match.summonedPlayers.contains(it.id) }
+            val desconvocadas = players.filter { !match.summonedPlayers.contains(it.id) }
+
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                item {
+                    Text("✅ CONVOCADAS (${convocadas.size}/12)", style = MaterialTheme.typography.titleMedium, color = com.example.entrenamientos.ui.theme.SuccessGreen)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                items(convocadas) { p ->
+                    Text("• ${p.name}", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, bottom = 4.dp))
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("❌ DESCONVOCADAS", style = MaterialTheme.typography.titleMedium, color = com.example.entrenamientos.ui.theme.AttendanceRed)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                items(desconvocadas) { p ->
+                    Column(modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)) {
+                        Text("• ${p.name}", style = MaterialTheme.typography.bodyLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        Text("Motivo: ${match.unsummonedReasons[p.id]?.takeIf { it.isNotBlank() } ?: "Sin motivo especificado"}", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            // AQUI ESTÁN LOS 3 BOTONES AHORA
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Button(
+                    onClick = { navController.popBackStack() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                    modifier = Modifier.weight(1f)
+                ) { Text("Volver") }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Button(
+                    onClick = {
+                        val resetMatch = match.copy(isConvocatoriaSaved = false, summonedPlayers = emptyList(), unsummonedReasons = emptyMap())
+                        viewModel.addOrUpdateMatch(resetMatch)
+                        navController.popBackStack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
+                    modifier = Modifier.weight(1f)
+                ) { Text("Eliminar") }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Button(
+                    onClick = { isEditMode = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue),
+                    modifier = Modifier.weight(1f)
+                ) { Text("Editar") }
+            }
+
+        } else {
+            Text("Seleccionadas: ${summonedIds.size}/12", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(players) { player ->
-                    val isSelected = selectedPlayerIds.contains(player.id)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clip(MaterialTheme.shapes.medium)
-                            .background(if (isSelected) InfantilBlue.copy(alpha = 0.2f) else Color.LightGray.copy(alpha = 0.3f))
-                            .clickable {
-                                if (isSelected) selectedPlayerIds.remove(player.id)
-                                else if (selectedPlayerIds.size < 12) selectedPlayerIds.add(player.id)
-                            }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = player.name, style = MaterialTheme.typography.bodyLarge)
-                        if (isSelected) {
-                            Icon(Icons.Default.Check, contentDescription = "Seleccionada", tint = InfantilBlue)
+                    val isSummoned = summonedIds.contains(player.id)
+                    val containerColor = if (isSummoned) com.example.entrenamientos.ui.theme.SuccessGreen else com.example.entrenamientos.ui.theme.AttendanceRed
+
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .background(containerColor.copy(alpha = 0.2f))
+                                .clickable {
+                                    if (isSummoned) {
+                                        summonedIds = summonedIds - player.id
+                                        if (!reasonsMap.containsKey(player.id)) reasonsMap[player.id] = ""
+                                    } else {
+                                        if (summonedIds.size >= 12) {
+                                            android.widget.Toast.makeText(context, "No puedes convocar a más de 12 jugadoras", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            summonedIds = summonedIds + player.id
+                                            reasonsMap.remove(player.id)
+                                        }
+                                    }
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(player.name, style = MaterialTheme.typography.bodyLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = containerColor)
+                            Icon(imageVector = if (isSummoned) androidx.compose.material.icons.Icons.Default.Check else androidx.compose.material.icons.Icons.Default.Close, contentDescription = null, tint = containerColor)
+                        }
+
+                        if (!isSummoned) {
+                            OutlinedTextField(
+                                value = reasonsMap[player.id] ?: "",
+                                onValueChange = { newText ->
+                                    reasonsMap = reasonsMap.toMutableMap().apply { put(player.id, newText) }
+                                },
+                                label = { Text("Motivo de la ausencia") },
+                                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 4.dp, end = 16.dp),
+                                singleLine = true
+                            )
                         }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Button(onClick = { navController.popBackStack() }, colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)) {
-                    Text("Cancelar")
-                }
-                Button(
-                    onClick = { step = 2 },
-                    enabled = selectedPlayerIds.size in 8..12,
-                    colors = ButtonDefaults.buttonColors(containerColor = InfantilBlue)
-                ) {
-                    Text("Siguiente")
-                }
-            }
-        } else {
-            // --- PASO 2: Motivos de las desconvocadas ---
-            val unselectedPlayers = players.filter { !selectedPlayerIds.contains(it.id) }
+            Button(
+                onClick = {
+                    val unsummonedPlayers = players.filter { !summonedIds.contains(it.id) }
+                    val hasMissingReasons = unsummonedPlayers.any { p -> reasonsMap[p.id].isNullOrBlank() }
 
-            if (unselectedPlayers.isEmpty()) {
-                Text("Todas las jugadoras han sido convocadas. ¡Equipazo!", style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.weight(1f))
-            } else {
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(unselectedPlayers) { player ->
-                        OutlinedTextField(
-                            value = reasons[player.id] ?: "",
-                            onValueChange = { reasons[player.id] = it },
-                            label = { Text("¿Por qué ${player.name} ha sido desconvocada?") },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    if (hasMissingReasons) {
+                        android.widget.Toast.makeText(
+                            context,
+                            "Debes añadir un motivo para TODAS las jugadoras desconvocadas",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        val updatedMatch = match.copy(
+                            isConvocatoriaSaved = true,
+                            summonedPlayers = summonedIds.toList(),
+                            unsummonedReasons = reasonsMap.toMap()
                         )
+                        viewModel.addOrUpdateMatch(updatedMatch)
+                        isEditMode = false
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Button(onClick = { step = 1 }, colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) {
-                    Text("Atrás")
-                }
-                Button(
-                    onClick = {
-                        viewModel.saveConvocatoria(dateStr, selectedPlayerIds.toSet(), reasons)
-                        navController.popBackStack()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                ) {
-                    Text("Guardar", color = Color.Black)
-                }
-            }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+            ) { Text("Guardar Convocatoria", color = Color.Black) }
         }
     }
 }
@@ -598,15 +671,378 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
 }
 
 @Composable
-fun StatsScreen(viewModel: BasketViewModel = hiltViewModel()) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Pantalla de Estadísticas en construcción", style = MaterialTheme.typography.titleMedium)
+fun StatsScreen(viewModel: BasketViewModel) {
+    var selectedTeam by remember { mutableStateOf(2013) }
+
+    val attendances by viewModel.getAllAttendancesByTeam(selectedTeam).collectAsState(initial = emptyList())
+    val allMatches by viewModel.matches.collectAsState()
+
+    // Estados para controlar qué meses/secciones están expandidos (ahora inician en false)
+    val expandedAttendanceMonths = remember { androidx.compose.runtime.mutableStateMapOf<java.time.YearMonth, Boolean>() }
+    val expandedMatchMonths = remember { androidx.compose.runtime.mutableStateMapOf<java.time.YearMonth, Boolean>() }
+    var isSeasonAttendanceExpanded by remember { mutableStateOf(false) }
+    var isSeasonMatchesExpanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Panel de Estadísticas", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Selector de Equipo
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            Button(
+                onClick = { selectedTeam = 2018 },
+                colors = ButtonDefaults.buttonColors(containerColor = if (selectedTeam == 2018) com.example.entrenamientos.ui.theme.PrebenjaminPink else Color.Gray)
+            ) { Text("Prebenjamines") }
+
+            Button(
+                onClick = { selectedTeam = 2013 },
+                colors = ButtonDefaults.buttonColors(containerColor = if (selectedTeam == 2013) com.example.entrenamientos.ui.theme.InfantilBlue else Color.Gray)
+            ) { Text("Infantiles") }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyColumn(modifier = Modifier.weight(1f)) {
+
+            // --- 1. ASISTENCIAS A ENTRENAMIENTOS (Ambas categorías) ---
+            item {
+                Text("Asistencia Mensual / Semanal", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Desplegable de TEMPORADA (Asistencia)
+            if (attendances.isNotEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { isSeasonAttendanceExpanded = !isSeasonAttendanceExpanded }
+                            .padding(vertical = 4.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "TEMPORADA",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (selectedTeam == 2018) com.example.entrenamientos.ui.theme.PrebenjaminPink else com.example.entrenamientos.ui.theme.InfantilBlue
+                        )
+                        Icon(
+                            imageVector = if (isSeasonAttendanceExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Expandir/Colapsar",
+                            tint = Color.Gray
+                        )
+                    }
+                }
+
+                if (isSeasonAttendanceExpanded) {
+                    val totalAtts = attendances.size
+                    val totalPresent = attendances.count { it.status == 0 }
+                    val seasonPercentage = if (totalAtts > 0) (totalPresent * 100) / totalAtts else 0
+
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Media de Asistencia Global", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Asistencia: $seasonPercentage%",
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                    color = if (seasonPercentage >= 80) com.example.entrenamientos.ui.theme.SuccessGreen else com.example.entrenamientos.ui.theme.AttendanceRed
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+
+            val attendancesByWeek = attendances.groupBy {
+                java.time.LocalDate.parse(it.date).with(java.time.DayOfWeek.MONDAY)
+            }
+
+            val monthToWeeksMap = mutableMapOf<java.time.YearMonth, MutableList<Pair<java.time.LocalDate, List<com.example.entrenamientos.data.Attendance>>>>()
+
+            attendancesByWeek.forEach { (weekStart, weekAtts) ->
+                val weekEnd = weekStart.plusDays(4)
+                val monthStart = java.time.YearMonth.from(weekStart)
+                val monthEnd = java.time.YearMonth.from(weekEnd)
+
+                monthToWeeksMap.getOrPut(monthStart) { mutableListOf() }.add(weekStart to weekAtts)
+                if (monthStart != monthEnd) {
+                    monthToWeeksMap.getOrPut(monthEnd) { mutableListOf() }.add(weekStart to weekAtts)
+                }
+            }
+
+            val sortedMonths = monthToWeeksMap.toSortedMap(compareByDescending { it })
+            val formatterMonth = java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale("es", "ES"))
+
+            if (sortedMonths.isEmpty()) {
+                item { Text("No hay datos de asistencia todavía.", color = Color.Gray) }
+            }
+
+            sortedMonths.forEach { (month, weeks) ->
+                val isExpanded = expandedAttendanceMonths[month] ?: false // Ahora el valor por defecto es false
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { expandedAttendanceMonths[month] = !isExpanded }
+                            .padding(vertical = 4.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = month.format(formatterMonth).uppercase(),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (selectedTeam == 2018) com.example.entrenamientos.ui.theme.PrebenjaminPink else com.example.entrenamientos.ui.theme.InfantilBlue
+                        )
+                        Icon(
+                            imageVector = if (isExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Expandir/Colapsar",
+                            tint = Color.Gray
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                if (isExpanded) {
+                    val sortedWeeks = weeks.sortedByDescending { it.first }
+                    sortedWeeks.forEach { (weekStart, weekAttendances) ->
+                        val weekEnd = weekStart.plusDays(4)
+                        val total = weekAttendances.size
+                        val asistieron = weekAttendances.count { it.status == 0 }
+                        val justificadas = weekAttendances.count { it.status == 1 }
+                        val noJustificadas = weekAttendances.count { it.status == 2 }
+
+                        val porcentaje = if (total > 0) (asistieron * 100) / total else 0
+
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("Semana del ${weekStart.dayOfMonth} al ${weekEnd.dayOfMonth} de ${weekEnd.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).lowercase()}", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Asistencia: $porcentaje%", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = if (porcentaje >= 80) com.example.entrenamientos.ui.theme.SuccessGreen else com.example.entrenamientos.ui.theme.AttendanceRed)
+                                        Text("✅ $asistieron  |  ⚠️ $justificadas  |  ❌ $noJustificadas", style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- 2. ESTADÍSTICAS DE PARTIDOS Y CONVOCATORIAS (Solo Infantiles) ---
+            if (selectedTeam == 2013) {
+                item {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                    Text("Medias de Temporada", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                val playedMatches = allMatches.filter { it.resultLocal != null && it.resultVisitor != null }
+
+                if (playedMatches.isEmpty()) {
+                    item { Text("No hay partidos jugados todavía.", color = Color.Gray) }
+                } else {
+                    var totalScored = 0
+                    var totalReceived = 0
+                    var totalFtMade = 0
+                    var totalFtAttempted = 0
+
+                    playedMatches.forEach { m ->
+                        if (m.isLocal) {
+                            totalScored += m.resultLocal ?: 0
+                            totalReceived += m.resultVisitor ?: 0
+                        } else {
+                            totalScored += m.resultVisitor ?: 0
+                            totalReceived += m.resultLocal ?: 0
+                        }
+                        totalFtMade += m.ftMade
+                        totalFtAttempted += m.ftAttempted
+                    }
+
+                    val avgScored = if (playedMatches.isNotEmpty()) totalScored.toFloat() / playedMatches.size else 0f
+                    val avgReceived = if (playedMatches.isNotEmpty()) totalReceived.toFloat() / playedMatches.size else 0f
+                    val ftPercentage = if (totalFtAttempted > 0) (totalFtMade.toFloat() / totalFtAttempted) * 100 else 0f
+
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue.copy(alpha = 0.15f))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("Puntos Anotados / partido: ${String.format(java.util.Locale.US, "%.1f", avgScored)} pts", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Puntos Recibidos / partido: ${String.format(java.util.Locale.US, "%.1f", avgReceived)} pts", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Tiros Libres (%): ${String.format(java.util.Locale.US, "%.1f", ftPercentage)}% ($totalFtMade/$totalFtAttempted)", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Resumen de Convocatorias", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                val matchesWithConvocatoria = allMatches.filter { it.isConvocatoriaSaved }
+
+                // Desplegable de TEMPORADA (Convocatorias)
+                if (matchesWithConvocatoria.isNotEmpty()) {
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable { isSeasonMatchesExpanded = !isSeasonMatchesExpanded }
+                                .padding(vertical = 4.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "TEMPORADA",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = com.example.entrenamientos.ui.theme.InfantilBlue
+                            )
+                            Icon(
+                                imageVector = if (isSeasonMatchesExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Expandir/Colapsar",
+                                tint = Color.Gray
+                            )
+                        }
+                    }
+
+                    if (isSeasonMatchesExpanded) {
+                        val totalMatches = matchesWithConvocatoria.size
+                        val totalSummoned = matchesWithConvocatoria.sumOf { it.summonedPlayers.size }
+                        val totalUnsummoned = matchesWithConvocatoria.sumOf { it.unsummonedReasons.size }
+
+                        val avgSummoned = totalSummoned.toFloat() / totalMatches
+                        val avgUnsummoned = totalUnsummoned.toFloat() / totalMatches
+
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue.copy(alpha = 0.15f))
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("Media Convocadas / partido: ${String.format(java.util.Locale.US, "%.1f", avgSummoned)}", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = com.example.entrenamientos.ui.theme.SuccessGreen)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Media Desconvocadas / partido: ${String.format(java.util.Locale.US, "%.1f", avgUnsummoned)}", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = com.example.entrenamientos.ui.theme.AttendanceRed)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                }
+
+                if (allMatches.isEmpty()) {
+                    item { Text("No hay partidos programados.", color = Color.Gray) }
+                } else {
+                    val matchesByMonth = allMatches.groupBy {
+                        java.time.YearMonth.from(java.time.LocalDate.parse(it.date))
+                    }
+                    val sortedMatchMonths = matchesByMonth.toSortedMap(compareByDescending { it })
+
+                    sortedMatchMonths.forEach { (month, matchesInMonth) ->
+                        val isExpanded = expandedMatchMonths[month] ?: false // Ahora el valor por defecto es false
+
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(MaterialTheme.shapes.small)
+                                    .clickable { expandedMatchMonths[month] = !isExpanded }
+                                    .padding(vertical = 4.dp, horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = month.format(formatterMonth).uppercase(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = com.example.entrenamientos.ui.theme.InfantilBlue
+                                )
+                                Icon(
+                                    imageVector = if (isExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Expandir/Colapsar",
+                                    tint = Color.Gray
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+
+                        if (isExpanded) {
+                            val sortedMatches = matchesInMonth.sortedByDescending { it.date }
+
+                            items(sortedMatches) { match ->
+                                val matchDateObj = java.time.LocalDate.parse(match.date)
+                                val matchDayOfWeek = matchDateObj.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+                                val matchMonthName = matchDateObj.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).lowercase()
+                                val formattedDate = "$matchDayOfWeek ${matchDateObj.dayOfMonth} de $matchMonthName"
+
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text("vs ${match.opponent}", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                            Text(formattedDate, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                        }
+
+                                        if (match.isConvocatoriaSaved) {
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text(
+                                                    text = "${match.summonedPlayers.size} Convocadas",
+                                                    color = com.example.entrenamientos.ui.theme.SuccessGreen,
+                                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                                Text(
+                                                    text = "${match.unsummonedReasons.size} Desconvocadas",
+                                                    color = com.example.entrenamientos.ui.theme.AttendanceRed,
+                                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                            }
+                                        } else {
+                                            Text(
+                                                text = "Pendiente",
+                                                color = Color.Gray,
+                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
-    var activeTab by remember { mutableStateOf("JUGADORAS") } // "JUGADORAS", "HORARIOS" o "PARTIDOS"
+fun SettingsScreen(viewModel: BasketViewModel = androidx.hilt.navigation.compose.hiltViewModel()) {
+    var activeTab by remember { mutableStateOf("JUGADORAS") } // "JUGADORAS", "HORARIOS", "PARTIDOS" o "FESTIVOS"
     var selectedTeam by remember { mutableStateOf(2013) }
 
     val players by viewModel.getPlayersForTeam(selectedTeam).collectAsState(initial = emptyList())
@@ -644,27 +1080,41 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
         Text("Ajustes", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Selector de Pestañas
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            Button(
-                onClick = { activeTab = "JUGADORAS" },
-                colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "JUGADORAS") Color.DarkGray else Color.LightGray)
-            ) { Text("Jugadoras", color = if (activeTab == "JUGADORAS") Color.White else Color.Black) }
+        // Selector de Pestañas organizado en 2 líneas (Grid 2x2)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { activeTab = "JUGADORAS" },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "JUGADORAS") Color.DarkGray else Color.LightGray)
+                ) { Text("Jugadoras", color = if (activeTab == "JUGADORAS") Color.White else Color.Black) }
 
-            Button(
-                onClick = { activeTab = "HORARIOS" },
-                colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "HORARIOS") Color.DarkGray else Color.LightGray)
-            ) { Text("Horarios", color = if (activeTab == "HORARIOS") Color.White else Color.Black) }
+                Button(
+                    onClick = { activeTab = "HORARIOS" },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "HORARIOS") Color.DarkGray else Color.LightGray)
+                ) { Text("Horarios", color = if (activeTab == "HORARIOS") Color.White else Color.Black) }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { activeTab = "PARTIDOS" },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "PARTIDOS") com.example.entrenamientos.ui.theme.InfantilBlue else Color.LightGray)
+                ) { Text("Partidos", color = if (activeTab == "PARTIDOS") Color.White else Color.Black) }
 
-            Button(
-                onClick = { activeTab = "PARTIDOS" },
-                colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "PARTIDOS") com.example.entrenamientos.ui.theme.InfantilBlue else Color.LightGray)
-            ) { Text("Partidos", color = if (activeTab == "PARTIDOS") Color.White else Color.Black) }
+                Button(
+                    onClick = { activeTab = "FESTIVOS" },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "FESTIVOS") Color.Red else Color.LightGray)
+                ) { Text("Festivos", color = if (activeTab == "FESTIVOS") Color.White else Color.Black) }
+            }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        if (activeTab != "PARTIDOS") {
+        // Cabeceras según la pestaña seleccionada
+        if (activeTab == "JUGADORAS" || activeTab == "HORARIOS") {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Button(
                     onClick = { selectedTeam = 2018 },
@@ -677,10 +1127,11 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 ) { Text("Infantiles") }
             }
             Spacer(modifier = Modifier.height(16.dp))
-        } else {
+        } else if (activeTab == "PARTIDOS") {
             Text("Gestión de Partidos (Infantiles 2013)", style = MaterialTheme.typography.labelMedium, color = com.example.entrenamientos.ui.theme.InfantilBlue, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp))
         }
 
+        // CONTENIDO DE LAS PESTAÑAS
         if (activeTab == "JUGADORAS") {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(players) { player ->
@@ -735,9 +1186,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
             ) { Text("Añadir Horario", color = Color.Black) }
 
-        } else {
-            // PESTAÑA PARTIDOS
-            // PESTAÑA PARTIDOS
+        } else if (activeTab == "PARTIDOS") {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(allMatches) { match ->
                     val dateObj = java.time.LocalDate.parse(match.date)
@@ -755,25 +1204,21 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            // 1ª Línea: Fecha y hora
                             Text(
                                 text = "$dayOfWeekName ${dateObj.dayOfMonth} de $monthName - ${match.time}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                             )
-                            // 2ª Línea: Polideportivo
                             Text(
                                 text = "Polideportivo ${match.location}",
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                            // 3ª Línea: Equipos
                             Text(
                                 text = if (match.isLocal) "Huerto - ${match.opponent}" else "${match.opponent} - Huerto",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
 
-                        // Botones de acción (Editar / Eliminar)
                         Row {
                             IconButton(onClick = {
                                 matchToEdit = match; matchStep = 1
@@ -800,10 +1245,12 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 },
                 modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
             ) { Text("Añadir Partido", color = Color.Black) }
+        } else if (activeTab == "FESTIVOS") {
+            FestivosSettingsTab(viewModel)
         }
     }
 
-    // Diálogos de Jugadoras y Horarios (Mantenidos igual)
+    // Diálogos de Jugadoras y Horarios
     if (showPlayerDialog) {
         AlertDialog(
             onDismissRequest = { showPlayerDialog = false },
@@ -870,14 +1317,12 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                             Spacer(modifier = Modifier.height(8.dp))
                             androidx.compose.material3.OutlinedButton(
                                 onClick = {
-                                    // Parseamos el formato dd-mm-aaaa para abrir el calendario
                                     val parts = matchDateInput.split("-")
                                     val d = parts.getOrNull(0)?.toIntOrNull() ?: 5
                                     val m = (parts.getOrNull(1)?.toIntOrNull() ?: 9) - 1
                                     val y = parts.getOrNull(2)?.toIntOrNull() ?: 2026
 
                                     val dpd = android.app.DatePickerDialog(context, { _, year, month, day ->
-                                        // Guardamos con formato dd-mm-aaaa
                                         matchDateInput = String.format(java.util.Locale.getDefault(), "%02d-%02d-%04d", day, month + 1, year)
                                     }, y, m, d)
 
@@ -939,9 +1384,15 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 } else {
                     Button(
                         onClick = {
-                            // Invertimos dd-mm-aaaa a aaaa-mm-dd para guardar en BD
                             val parts = matchDateInput.split("-")
                             val dateForDb = "${parts[2]}-${parts[1]}-${parts[0]}"
+
+                            // --- VALIDACIÓN DE DÍA FESTIVO ---
+                            val dateObj = java.time.LocalDate.parse(dateForDb)
+                            if (viewModel.isHoliday(dateObj)) {
+                                android.widget.Toast.makeText(context, "No puedes programar partidos en días festivos", android.widget.Toast.LENGTH_SHORT).show()
+                                return@Button // Bloquea el guardado si es festivo
+                            }
 
                             val newMatch = com.example.entrenamientos.data.Match(
                                 id = matchToEdit?.id ?: 0,
@@ -967,5 +1418,95 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 }
             }
         )
+    }
+}
+
+@Composable
+fun FestivosSettingsTab(viewModel: BasketViewModel) {
+    val holidays by viewModel.holidays.collectAsState()
+    var newHolidayDate by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Añadir Día Festivo", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Sustituimos el campo de texto por un botón que abre el calendario
+            androidx.compose.material3.OutlinedButton(
+                onClick = {
+                    val cal = java.util.Calendar.getInstance()
+                    // Si ya había una fecha seleccionada, abrimos el calendario en esa fecha
+                    if (newHolidayDate.isNotEmpty()) {
+                        try {
+                            val parts = newHolidayDate.split("-")
+                            cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt())
+                        } catch (e: Exception) {}
+                    }
+
+                    val y = cal.get(java.util.Calendar.YEAR)
+                    val m = cal.get(java.util.Calendar.MONTH)
+                    val d = cal.get(java.util.Calendar.DAY_OF_MONTH)
+
+                    android.app.DatePickerDialog(context, { _, year, month, day ->
+                        // Guardamos la fecha en formato YYYY-MM-DD necesario para la BD
+                        newHolidayDate = String.format(java.util.Locale.getDefault(), "%04d-%02d-%02d", year, month + 1, day)
+                    }, y, m, d).show()
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = if (newHolidayDate.isEmpty()) "Seleccionar fecha" else newHolidayDate,
+                    color = if (newHolidayDate.isEmpty()) Color.Gray else Color.Black
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Button(
+                onClick = {
+                    if (newHolidayDate.isNotEmpty()) {
+                        viewModel.addHoliday(newHolidayDate)
+                        newHolidayDate = "" // Reseteamos el valor tras guardar
+                    } else {
+                        android.widget.Toast.makeText(context, "Por favor, selecciona una fecha primero", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = com.example.entrenamientos.ui.theme.InfantilBlue,
+                    disabledContainerColor = Color.LightGray
+                ),
+                enabled = newHolidayDate.isNotEmpty() // El botón solo se activa si hay fecha seleccionada
+            ) {
+                Text("Añadir", color = if (newHolidayDate.isNotEmpty()) Color.White else Color.DarkGray)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("Festivos Registrados", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyColumn {
+            items(holidays.sortedBy { it.date }) { holiday ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .background(Color.LightGray.copy(alpha = 0.2f), MaterialTheme.shapes.small)
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val hDate = java.time.LocalDate.parse(holiday.date)
+                    val formatted = "${hDate.dayOfMonth} de ${hDate.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))} ${hDate.year}"
+
+                    Text(formatted, style = MaterialTheme.typography.bodyLarge, color = Color.Red, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+
+                    IconButton(onClick = { viewModel.removeHoliday(holiday) }) {
+                        Icon(androidx.compose.material.icons.Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
+                    }
+                }
+            }
+        }
     }
 }

@@ -32,4 +32,13 @@ class AppRepository @Inject constructor(
     fun getAllSchedules(): Flow<List<TrainingSchedule>> = dao.getAllSchedules()
     suspend fun insertSchedule(schedule: TrainingSchedule) = dao.insertSchedule(schedule)
     suspend fun deleteSchedule(schedule: TrainingSchedule) = dao.deleteSchedule(schedule)
+
+    fun getAllAttendancesByTeam(year: Int): Flow<List<Attendance>> {
+        return dao.getAllAttendancesByTeam(year)
+    }
+
+    // Festivos
+    fun getAllHolidays(): kotlinx.coroutines.flow.Flow<List<Holiday>> = dao.getAllHolidays()
+    suspend fun insertHoliday(holiday: Holiday) = dao.insertHoliday(holiday)
+    suspend fun deleteHoliday(holiday: Holiday) = dao.deleteHoliday(holiday)
 }

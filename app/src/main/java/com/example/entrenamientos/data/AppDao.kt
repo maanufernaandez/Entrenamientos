@@ -60,4 +60,17 @@ interface AppDao {
 
     @Delete
     suspend fun deleteSchedule(schedule: TrainingSchedule)
+
+    @Query("SELECT * FROM attendances WHERE teamYear = :year")
+    fun getAllAttendancesByTeam(year: Int): Flow<List<Attendance>>
+
+    // --- HOLIDAYS ---
+    @Query("SELECT * FROM holidays")
+    fun getAllHolidays(): kotlinx.coroutines.flow.Flow<List<Holiday>>
+
+    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun insertHoliday(holiday: Holiday)
+
+    @Delete
+    suspend fun deleteHoliday(holiday: Holiday)
 }

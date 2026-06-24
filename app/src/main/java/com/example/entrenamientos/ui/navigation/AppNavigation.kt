@@ -31,26 +31,30 @@ fun AppNavigation() {
     val navController = rememberNavController()
     val items = listOf(Screen.Calendar, Screen.Stats, Screen.Settings)
 
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = navBackStackEntry?.destination
-                items.forEach { screen ->
-                    NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.title) },
-                        label = { Text(screen.title) },
-                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
-                        onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            // Solo mostramos la barra inferior si NO estamos en la pantalla de carga
+            if (currentDestination?.route != "splash") {
+                NavigationBar {
+                    items.forEach { screen ->
+                        NavigationBarItem(
+                            icon = { Icon(screen.icon, contentDescription = screen.title) },
+                            label = { Text(screen.title) },
+                            selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                            onClick = {
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -60,9 +64,14 @@ fun AppNavigation() {
 
         NavHost(
             navController = navController,
-            startDestination = Screen.Calendar.route,
+            startDestination = "splash", // <-- Arrancamos directamente en la pantalla de carga
             modifier = Modifier.padding(innerPadding)
         ) {
+            // NUEVA RUTA: Pantalla de carga
+            composable("splash") {
+                com.example.entrenamientos.ui.screens.SplashScreen(navController = navController)
+            }
+
             composable(Screen.Calendar.route) {
                 com.example.entrenamientos.ui.screens.CalendarScreen(viewModel = sharedViewModel, navController = navController)
             }
@@ -79,7 +88,6 @@ fun AppNavigation() {
                 val type = backStackEntry.arguments?.getString("type") ?: "ENTRENAMIENTO"
                 com.example.entrenamientos.ui.screens.TrainingNoteScreen(viewModel = sharedViewModel, navController = navController, noteType = type)
             }
-            // Rutas añadidas
             composable("convocatoria") {
                 com.example.entrenamientos.ui.screens.ConvocatoriaScreen(viewModel = sharedViewModel, navController = navController)
             }

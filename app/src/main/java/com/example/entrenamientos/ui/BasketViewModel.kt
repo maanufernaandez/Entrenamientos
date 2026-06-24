@@ -32,11 +32,8 @@ class BasketViewModel @Inject constructor(
             repository.getAllSchedules().collect { list: List<TrainingSchedule> ->
                 if (list.isEmpty()) {
                     val defaultSchedules = listOf(
-                        // Prebenjamines (2018): Martes y Jueves 16:30 - 17:45
                         TrainingSchedule(teamYear = 2018, dayOfWeek = 2, startTime = "16:30", endTime = "17:45"),
                         TrainingSchedule(teamYear = 2018, dayOfWeek = 4, startTime = "16:30", endTime = "17:45"),
-
-                        // Infantiles (2013): Lunes y Jueves 19:00 - 20:15, Viernes 17:45 - 19:00
                         TrainingSchedule(teamYear = 2013, dayOfWeek = 1, startTime = "19:00", endTime = "20:15"),
                         TrainingSchedule(teamYear = 2013, dayOfWeek = 4, startTime = "19:00", endTime = "20:15"),
                         TrainingSchedule(teamYear = 2013, dayOfWeek = 5, startTime = "17:45", endTime = "19:00")
@@ -51,6 +48,30 @@ class BasketViewModel @Inject constructor(
         viewModelScope.launch {
             repository.getAllMatches().collect { list: List<Match> ->
                 _matches.value = list
+            }
+        }
+
+        viewModelScope.launch {
+            repository.getAllHolidays().collect { list ->
+                if (list.isEmpty()) {
+                    val defaultHolidays = listOf(
+                        Holiday("2026-10-12"), // Fiesta Nacional de España
+                        Holiday("2026-11-01"), // Todos los Santos
+                        Holiday("2026-12-06"), // Día de la Constitución
+                        Holiday("2026-12-08"), // Inmaculada Concepción
+                        Holiday("2026-12-24"), // Nochebuena
+                        Holiday("2026-12-25"), // Navidad
+                        Holiday("2026-12-31"), // Nochevieja
+                        Holiday("2027-01-01"), // Año Nuevo
+                        Holiday("2027-01-06"), // Reyes Magos
+                        Holiday("2027-03-25"), // Jueves Santo (2027)
+                        Holiday("2027-03-26"), // Viernes Santo (2027)
+                        Holiday("2027-05-01")  // Día del Trabajador
+                    )
+                    defaultHolidays.forEach { repository.insertHoliday(it) }
+                } else {
+                    _holidays.value = list
+                }
             }
         }
     }
@@ -128,8 +149,9 @@ class BasketViewModel @Inject constructor(
         }
     }
 
-    // AHORA es dinámico y lee de la base de datos (_schedules) en lugar de un objeto fijo
     fun getTeamsForDate(date: java.time.LocalDate): List<Int> {
+        if (isHoliday(date)) return emptyList()
+
         val dayValue = date.dayOfWeek.value
         return _schedules.value.filter { it.dayOfWeek == dayValue }.map { it.teamYear }.distinct()
     }
@@ -232,5 +254,30 @@ class BasketViewModel @Inject constructor(
         }
 
         return if (hasWon) com.example.entrenamientos.ui.theme.SuccessGreen else Color.Red
+    }
+
+    fun getAllAttendancesByTeam(year: Int): kotlinx.coroutines.flow.Flow<List<Attendance>> {
+        return repository.getAllAttendancesByTeam(year)
+    }
+
+    // --- ESTADOS Y MÉTODOS PARA FESTIVOS ---
+    private val _holidays = MutableStateFlow<List<Holiday>>(emptyList())
+    val holidays: StateFlow<List<Holiday>> = _holidays.asStateFlow()
+
+    // 🔴 Añade esto dentro de tu bloque init { ... } existente:
+    // viewModelScope.launch {
+    //     repository.getAllHolidays().collect { list -> _holidays.value = list }
+    // }
+
+    fun isHoliday(date: java.time.LocalDate): Boolean {
+        return _holidays.value.any { it.date == date.toString() }
+    }
+
+    fun addHoliday(date: String) {
+        viewModelScope.launch { repository.insertHoliday(Holiday(date)) }
+    }
+
+    fun removeHoliday(holiday: Holiday) {
+        viewModelScope.launch { repository.deleteHoliday(holiday) }
     }
 }

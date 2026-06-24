@@ -15,5 +15,7 @@ data class Match(
     val resultVisitor: Int? = null,
     val ftMade: Int = 0,
     val ftAttempted: Int = 0,
-    val isConvocatoriaSaved: Boolean = false
+    val isConvocatoriaSaved: Boolean = false,
+    val summonedPlayers: List<Long> = emptyList(),
+    val unsummonedReasons: Map<Long, String> = emptyMap()
 )
