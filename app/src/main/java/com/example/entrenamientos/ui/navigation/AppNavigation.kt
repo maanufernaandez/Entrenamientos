@@ -1,10 +1,9 @@
 package com.example.entrenamientos.ui.navigation
 
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,9 +20,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    object Calendar : Screen("calendar", "Calendario", Icons.Default.DateRange)
-    object Stats : Screen("stats", "Estadísticas", Icons.Default.Star)
-    object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
+    object Calendar : Screen("calendar", "Calendario", androidx.compose.material.icons.Icons.Default.DateRange)
+    object Stats : Screen("stats", "Estadísticas", androidx.compose.material.icons.Icons.Default.BarChart)
+    object Settings : Screen("settings", "Ajustes", androidx.compose.material.icons.Icons.Default.Settings)
 }
 
 @Composable
@@ -31,30 +30,26 @@ fun AppNavigation() {
     val navController = rememberNavController()
     val items = listOf(Screen.Calendar, Screen.Stats, Screen.Settings)
 
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = navBackStackEntry?.destination
-
     Scaffold(
         bottomBar = {
-            // Solo mostramos la barra inferior si NO estamos en la pantalla de carga
-            if (currentDestination?.route != "splash") {
-                NavigationBar {
-                    items.forEach { screen ->
-                        NavigationBarItem(
-                            icon = { Icon(screen.icon, contentDescription = screen.title) },
-                            label = { Text(screen.title) },
-                            selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
-                            onClick = {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
+            NavigationBar {
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentDestination = navBackStackEntry?.destination
+                items.forEach { screen ->
+                    NavigationBarItem(
+                        icon = { Icon(screen.icon, contentDescription = screen.title) },
+                        label = { Text(screen.title) },
+                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                        onClick = {
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
                                 }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                        )
-                    }
+                        }
+                    )
                 }
             }
         }
@@ -64,14 +59,9 @@ fun AppNavigation() {
 
         NavHost(
             navController = navController,
-            startDestination = "splash", // <-- Arrancamos directamente en la pantalla de carga
+            startDestination = Screen.Calendar.route, // <-- Arranca directamente en el calendario
             modifier = Modifier.padding(innerPadding)
         ) {
-            // NUEVA RUTA: Pantalla de carga
-            composable("splash") {
-                com.example.entrenamientos.ui.screens.SplashScreen(navController = navController)
-            }
-
             composable(Screen.Calendar.route) {
                 com.example.entrenamientos.ui.screens.CalendarScreen(viewModel = sharedViewModel, navController = navController)
             }

@@ -60,6 +60,7 @@ dependencies {
     // Base de Datos (Room)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.androidx.navigation.runtime.android)
     kapt(libs.room.compiler)
 
     // Inyección de Dependencias (Hilt)

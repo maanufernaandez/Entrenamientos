@@ -25,6 +25,10 @@ class BasketViewModel @Inject constructor(
     private val _matches = MutableStateFlow<List<Match>>(emptyList())
     val matches: StateFlow<List<Match>> = _matches.asStateFlow()
 
+    // --- NUEVO ESTADO PARA VALIDACIÓN DE ASISTENCIAS ---
+    private val _allAttendances2013 = MutableStateFlow<List<Attendance>>(emptyList())
+    val allAttendances2013: StateFlow<List<Attendance>> = _allAttendances2013.asStateFlow()
+
     init {
         checkAndPopulateDefaultPlayers()
 
@@ -66,12 +70,17 @@ class BasketViewModel @Inject constructor(
                         Holiday("2027-01-06"), // Reyes Magos
                         Holiday("2027-03-25"), // Jueves Santo (2027)
                         Holiday("2027-03-26"), // Viernes Santo (2027)
-                        Holiday("2027-05-01")  // Día del Trabajador
                     )
                     defaultHolidays.forEach { repository.insertHoliday(it) }
                 } else {
                     _holidays.value = list
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            repository.getAllAttendancesByTeam(2013).collect { list ->
+                _allAttendances2013.value = list
             }
         }
     }
@@ -264,11 +273,6 @@ class BasketViewModel @Inject constructor(
     private val _holidays = MutableStateFlow<List<Holiday>>(emptyList())
     val holidays: StateFlow<List<Holiday>> = _holidays.asStateFlow()
 
-    // 🔴 Añade esto dentro de tu bloque init { ... } existente:
-    // viewModelScope.launch {
-    //     repository.getAllHolidays().collect { list -> _holidays.value = list }
-    // }
-
     fun isHoliday(date: java.time.LocalDate): Boolean {
         return _holidays.value.any { it.date == date.toString() }
     }
@@ -279,5 +283,28 @@ class BasketViewModel @Inject constructor(
 
     fun removeHoliday(holiday: Holiday) {
         viewModelScope.launch { repository.deleteHoliday(holiday) }
+    }
+
+    fun canMakeConvocatoria(matchDate: java.time.LocalDate): Pair<Boolean, String?> {
+        val attendances = _allAttendances2013.value
+
+        // Asumimos que la temporada empieza el 1 de septiembre
+        val seasonStartYear = if (matchDate.monthValue >= 9) matchDate.year else matchDate.year - 1
+        val seasonStart = java.time.LocalDate.of(seasonStartYear, 9, 1)
+
+        var currDate = seasonStart
+        while (currDate.isBefore(matchDate)) {
+            // Comprobamos si las Infantiles (2013) tenían entrenamiento ese día (se salta los festivos automáticamente)
+            if (getTeamsForDate(currDate).contains(2013)) {
+                // Comprobamos si hay algún registro de asistencia ese día
+                val hasAttendance = attendances.any { it.date == currDate.toString() }
+                if (!hasAttendance) {
+                    val formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")
+                    return Pair(false, "Falta asistencia del ${currDate.format(formatter)}")
+                }
+            }
+            currDate = currDate.plusDays(1)
+        }
+        return Pair(true, null)
     }
 }
