@@ -428,7 +428,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
     var reasonsMap by remember { mutableStateOf(match.unsummonedReasons.toMutableMap()) }
 
     var playerToUnsummon by remember { mutableStateOf<com.example.entrenamientos.data.Player?>(null) }
-    val reasonOptions = listOf("Rotación", "Lesión", "Falta Entrenamientos", "Castigo", "Ausencia")
+    val reasonOptions = listOf("Rotación", "Lesión", "Falta a entrenamientos", "Castigada", "No puede ir")
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(if (isEditMode) "Crear/Editar Convocatoria" else "Convocatoria Oficial", style = MaterialTheme.typography.headlineMedium)
@@ -556,7 +556,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
     if (playerToUnsummon != null) {
         AlertDialog(
             onDismissRequest = { playerToUnsummon = null },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false), // Permite que el diálogo ocupe más ancho
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
             modifier = Modifier
                 .fillMaxWidth(0.95f) // Ocupa el 95% del ancho de la pantalla
                 .padding(16.dp),
