@@ -1070,6 +1070,49 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                     Text("Media Convocadas / partido: ${String.format(java.util.Locale.US, "%.1f", avgSummoned)}", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = com.example.entrenamientos.ui.theme.SuccessGreen)
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text("Media Desconvocadas / partido: ${String.format(java.util.Locale.US, "%.1f", avgUnsummoned)}", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = com.example.entrenamientos.ui.theme.AttendanceRed)
+
+                                    // --- HISTORIAL DE DESCONVOCATORIAS ---
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    HorizontalDivider(color = Color.Gray, thickness = 1.dp, modifier = Modifier.padding(bottom = 8.dp))
+                                    Text("Historial de Desconvocatorias", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    val unsummonedStats = remember(matchesWithConvocatoria) {
+                                        val stats = mutableMapOf<Long, MutableMap<String, Int>>()
+                                        matchesWithConvocatoria.forEach { match ->
+                                            match.unsummonedReasons.forEach { (playerId, reason) ->
+                                                val playerStats = stats.getOrPut(playerId) { mutableMapOf() }
+                                                playerStats[reason] = playerStats.getOrDefault(reason, 0) + 1
+                                            }
+                                        }
+                                        stats
+                                    }
+
+                                    if (unsummonedStats.isEmpty()) {
+                                        Text("No hay desconvocatorias registradas.", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
+                                    } else {
+                                        players.sortedBy { it.name }.forEach { player ->
+                                            val playerStats = unsummonedStats[player.id]
+                                            if (playerStats != null && playerStats.isNotEmpty()) {
+                                                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                                                    val totalPlayerUnsummoned = playerStats.values.sum()
+                                                    Text(
+                                                        text = "• ${player.name} ($totalPlayerUnsummoned ausencias totales)",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                                        color = com.example.entrenamientos.ui.theme.AttendanceRed
+                                                    )
+                                                    playerStats.forEach { (reason, count) ->
+                                                        Text(
+                                                            text = "  - $reason: $count",
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            color = Color.DarkGray
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
@@ -1170,7 +1213,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
 }
 
 @Composable
-fun SettingsScreen(viewModel: BasketViewModel = androidx.hilt.navigation.compose.hiltViewModel()) {
+fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     var activeTab by remember { mutableStateOf("JUGADORAS") } // "JUGADORAS", "HORARIOS", "PARTIDOS" o "FESTIVOS"
     var selectedTeam by remember { mutableStateOf(2013) }
 
