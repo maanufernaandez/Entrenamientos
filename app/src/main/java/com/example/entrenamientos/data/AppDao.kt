@@ -66,9 +66,9 @@ interface AppDao {
 
     // --- HOLIDAYS ---
     @Query("SELECT * FROM holidays")
-    fun getAllHolidays(): kotlinx.coroutines.flow.Flow<List<Holiday>>
+    fun getAllHolidays(): Flow<List<Holiday>>
 
-    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHoliday(holiday: Holiday)
 
     @Delete

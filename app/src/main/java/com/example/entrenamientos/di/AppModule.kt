@@ -23,7 +23,7 @@ object AppModule {
             AppDatabase::class.java,
             "entrenamientos_database"
         )
-            .fallbackToDestructiveMigration() // <--- TIENE QUE ESTAR AQUÍ TAMBIÉN
+            .fallbackToDestructiveMigration()
             .build()
     }
 

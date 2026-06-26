@@ -21,13 +21,13 @@ class BasketViewModel @Inject constructor(
     // --- ESTADOS Y MÉTODOS PARA HORARIOS DE ENTRENAMIENTO ---
     private val _schedules = MutableStateFlow<List<TrainingSchedule>>(emptyList())
     val schedules: StateFlow<List<TrainingSchedule>> = _schedules.asStateFlow()
+
     // --- ESTADOS Y MÉTODOS PARA PARTIDOS ---
     private val _matches = MutableStateFlow<List<Match>>(emptyList())
     val matches: StateFlow<List<Match>> = _matches.asStateFlow()
 
     // --- NUEVO ESTADO PARA VALIDACIÓN DE ASISTENCIAS ---
     private val _allAttendances2013 = MutableStateFlow<List<Attendance>>(emptyList())
-    val allAttendances2013: StateFlow<List<Attendance>> = _allAttendances2013.asStateFlow()
 
     init {
         checkAndPopulateDefaultPlayers()
@@ -91,11 +91,21 @@ class BasketViewModel @Inject constructor(
             val currentPrebenjamines = repository.getPlayers(2018).first()
             if (currentPrebenjamines.isEmpty()) {
                 val defaultPrebenjamines = listOf(
-                    "Jericó", "Andrea", "Silvia", "Daniela", "Carlos", "Jaqueline",
-                    "Emma", "Vega", "Lara", "Crismeily", "Martina", "Izan"
+                    Player(name = "Jericó", lastName = "Rios", teamYear = 2018),
+                    Player(name = "Andrea", lastName = "Arrizabalaga", teamYear = 2018),
+                    Player(name = "Silvia", lastName = "Beriain", teamYear = 2018),
+                    Player(name = "Daniela", lastName = "Urdanoz", teamYear = 2018),
+                    Player(name = "Carlos", lastName = "Ibero", teamYear = 2018),
+                    Player(name = "Jaqueline", lastName = "Echeverria", teamYear = 2018),
+                    Player(name = "Emma", lastName = "Berango", teamYear = 2018),
+                    Player(name = "Vega", lastName = "Sadaba", teamYear = 2018),
+                    Player(name = "Lara", lastName = "Sadaba", teamYear = 2018),
+                    Player(name = "Crismeily", lastName = "Moran", teamYear = 2018),
+                    Player(name = "Martina", lastName = "del Pozo", teamYear = 2018),
+                    Player(name = "Izan", lastName = "Marin", teamYear = 2018)
                 )
-                defaultPrebenjamines.forEach { name ->
-                    repository.addPlayer(Player(name = name, teamYear = 2018))
+                defaultPrebenjamines.forEach { player ->
+                    repository.addPlayer(player) // Corregido: addPlayer en lugar de insertPlayer
                 }
             }
 
@@ -103,11 +113,22 @@ class BasketViewModel @Inject constructor(
             val currentInfantiles = repository.getPlayers(2013).first()
             if (currentInfantiles.isEmpty()) {
                 val defaultInfantiles = listOf(
-                    "Mayte", "Martina", "Maria", "Nahia", "Leire", "Tania",
-                    "Aitana", "Wiktoria", "Saioa", "Alba", "Arianna", "Paula", "Salome"
+                    Player(name = "Mayte", lastName = "Mayte", teamYear = 2013),
+                    Player(name = "Martina", lastName = "Berrio", teamYear = 2013),
+                    Player(name = "Maria", lastName = "Del Pozo", teamYear = 2013),
+                    Player(name = "Nahia", lastName = "Altagracia", teamYear = 2013),
+                    Player(name = "Leire", lastName = "Elarre", teamYear = 2013),
+                    Player(name = "Tania", lastName = "Elcano", teamYear = 2013),
+                    Player(name = "Aitana", lastName = "Hernandez", teamYear = 2013),
+                    Player(name = "Wiktoria", lastName = "Konig", teamYear = 2013),
+                    Player(name = "Saioa", lastName = "Lizarraga", teamYear = 2013),
+                    Player(name = "Alba", lastName = "Rodriguez", teamYear = 2013),
+                    Player(name = "Arianna", lastName = "Vieira", teamYear = 2013),
+                    Player(name = "Paula", lastName = "Zamarreño", teamYear = 2013),
+                    Player(name = "Salome", lastName = "Militino", teamYear = 2013)
                 )
-                defaultInfantiles.forEach { name ->
-                    repository.addPlayer(Player(name = name, teamYear = 2013))
+                defaultInfantiles.forEach { player ->
+                    repository.addPlayer(player) // Corregido: addPlayer en lugar de insertPlayer
                 }
             }
         }
@@ -127,9 +148,10 @@ class BasketViewModel @Inject constructor(
     }
 
     // Funciones para interactuar con la Base de Datos (Jugadoras)
-    fun addPlayer(name: String, teamYear: Int) {
+    fun addPlayer(name: String, lastName: String, teamYear: Int) {
+        val player = Player(name = name, lastName = lastName, teamYear = teamYear)
         viewModelScope.launch {
-            repository.addPlayer(Player(name = name, teamYear = teamYear))
+            repository.addPlayer(player)
         }
     }
 
@@ -206,10 +228,6 @@ class BasketViewModel @Inject constructor(
         return parts[0].toIntOrNull()?.times(60)?.plus(parts[1].toIntOrNull() ?: 0) ?: 0
     }
 
-    fun hasMatchOnDate(date: java.time.LocalDate): Boolean {
-        return _matches.value.any { it.date == date.toString() }
-    }
-
     // --- ESTADOS Y MÉTODOS PARA ASISTENCIA ---
     private val _selectedTeamYear = MutableStateFlow(2018)
     val selectedTeamYear: StateFlow<Int> = _selectedTeamYear.asStateFlow()
@@ -230,11 +248,6 @@ class BasketViewModel @Inject constructor(
         viewModelScope.launch {
             repository.saveAttendances(attendances)
         }
-    }
-
-    fun saveConvocatoria(date: String, selectedPlayerIds: Set<Long>, reasons: Map<Long, String>) {
-        println("Convocatoria guardada para $date: $selectedPlayerIds")
-        println("Motivos de ausencia: $reasons")
     }
 
     fun addOrUpdateMatch(match: Match) {

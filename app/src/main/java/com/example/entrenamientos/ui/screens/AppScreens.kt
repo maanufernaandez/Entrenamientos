@@ -1,5 +1,6 @@
 package com.example.entrenamientos.ui.screens
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -43,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,15 +53,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.entrenamientos.ui.BasketViewModel
-
-val PrebenjaminPink = Color(0xFFFF80AB)
-val InfantilBlue = Color(0xFF2196F3)
 
 @Composable
 fun CalendarScreen(
@@ -89,14 +90,6 @@ fun CalendarScreen(
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- Cabecera de días ---
-        Row(modifier = Modifier.fillMaxWidth()) {
-            listOf("L", "M", "X", "J", "V", "S", "D").forEach { day ->
-                Text(day, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-
         // --- Generación de días ---
         val days = mutableListOf<java.time.LocalDate?>()
         val firstDayOfWeek = currentMonth.atDay(1).dayOfWeek.value
@@ -104,24 +97,61 @@ fun CalendarScreen(
         for (i in 1..currentMonth.lengthOfMonth()) days.add(currentMonth.atDay(i))
         while (days.size % 7 != 0) days.add(null)
 
-        Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        // --- CONTENEDOR TIPO TABLA (CUADRÍCULA PERFECTA) ---
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(Color.Black) // El fondo negro creará las líneas a través de las rendijas
+                .padding(1.dp), // Borde exterior uniforme
+            verticalArrangement = Arrangement.spacedBy(1.dp) // Separación horizontal (líneas divisorias) de 1.dp
+        ) {
+            // --- Cabecera de días ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(1.dp) // Separación vertical de 1.dp
+            ) {
+                listOf("L", "M", "X", "J", "V", "S", "D").forEach { day ->
+                    Text(
+                        text = day,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(Color(0xFFEEEEEE)) // Gris claro sólido
+                            .padding(vertical = 8.dp),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // --- Grid de días ---
             val weeks = days.chunked(7)
             weeks.forEach { week ->
-                Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(1.dp) // Separación vertical de 1.dp
+                ) {
                     week.forEach { date ->
-                        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        ) {
                             if (date != null) {
                                 DayCell(
                                     date = date,
                                     viewModel = viewModel,
                                     schedules = schedules,
                                     onClick = {
-                                        // Guardamos la fecha clicada y activamos el diálogo
                                         viewModel.setSelectedDate(date.toString())
                                         clickedDate = date
                                         showDayDialog = true
                                     }
                                 )
+                            } else {
+                                // Fondo gris sólido para los días vacíos del mes
+                                Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF5F5F5)))
                             }
                         }
                     }
@@ -156,8 +186,7 @@ fun DayCell(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(2.dp)
-            .background(if (isHoliday) Color(0xFFFFEBEE) else Color.White, shape = MaterialTheme.shapes.small)
+            .background(if (isHoliday) Color(0xFFFFEBEE) else Color.White)
             .clickable { onClick() }
             .padding(4.dp)
     ) {
@@ -165,9 +194,9 @@ fun DayCell(
         Text(
             text = date.dayOfMonth.toString(),
             modifier = Modifier.align(Alignment.TopStart),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge, // Tamaño ligeramente mayor
             color = if (isHoliday) Color.Red else Color.Unspecified,
-            fontWeight = if (isHoliday) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal
+            fontWeight = if (isHoliday) FontWeight.ExtraBold else FontWeight.SemiBold // Más marcado
         )
 
         // Contenido centrado con espaciado uniforme
@@ -182,7 +211,7 @@ fun DayCell(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .clip(CircleShape)
                         .background(circleColor),
                     contentAlignment = Alignment.Center
                 ) {
@@ -190,7 +219,7 @@ fun DayCell(
                         text = if (match.isLocal) "L" else "V",
                         color = Color.White,
                         fontSize = 14.sp,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -201,7 +230,7 @@ fun DayCell(
                     modifier = Modifier.fillMaxWidth(0.95f).height(24.dp).background(com.example.entrenamientos.ui.theme.PrebenjaminPink, shape = MaterialTheme.shapes.extraSmall),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("2018", color = Color.White, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text("2018", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -216,7 +245,7 @@ fun DayCell(
                     modifier = Modifier.fillMaxWidth(0.95f).height(24.dp).background(com.example.entrenamientos.ui.theme.InfantilBlue, shape = MaterialTheme.shapes.extraSmall),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("2013", color = Color.White, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text("2013", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -249,34 +278,34 @@ fun DayOptionsDialog(
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // --- CABECERA ---
                 if (hasMatch && match != null) {
-                    Column(horizontalAlignment = androidx.compose.ui.Alignment.Start) {
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Icon(androidx.compose.material.icons.Icons.Default.DateRange, null, Modifier.size(20.dp))
+                    Column(horizontalAlignment = Alignment.Start) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.DateRange, null, Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
                             Text("$dayOfWeek ${date.dayOfMonth} de $monthName - ${match.time}", style = MaterialTheme.typography.titleMedium)
                         }
                         Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Icon(androidx.compose.material.icons.Icons.Default.Sports, null, Modifier.size(20.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Sports, null, Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 text = if (match.isLocal) "CD Huerto - ${match.opponent}" else "${match.opponent} - CD Huerto",
-                                style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold
                             )
                         }
                         Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Icon(androidx.compose.material.icons.Icons.Default.LocationOn, null, Modifier.size(20.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.LocationOn, null, Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
                             Text("Polideportivo ${match.location}", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                         }
                     }
                 } else {
-                    Text("Opciones del $dayOfWeek ${date.dayOfMonth} de $monthName", style = MaterialTheme.typography.titleMedium)
+                    Text("$dayOfWeek ${date.dayOfMonth} de $monthName", style = MaterialTheme.typography.titleMedium)
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -284,7 +313,6 @@ fun DayOptionsDialog(
                 // --- ENTRENAMIENTOS ---
                 if (teams.isNotEmpty()) {
                     teams.forEachIndexed { index, teamYear ->
-                        // Línea separadora si hay más de un entrenamiento
                         if (index > 0) {
                             HorizontalDivider(color = Color.Black, thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
                         }
@@ -294,13 +322,11 @@ fun DayOptionsDialog(
 
                         Text(teamName, style = MaterialTheme.typography.bodyMedium, color = teamColor)
 
-                        // Fila 1: Entrenamiento y Asistencia
                         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                             Button(onClick = { viewModel.setSelectedTeamYear(teamYear); onDismiss(); navController.navigate("notes/ENTRENAMIENTO") }, colors = ButtonDefaults.buttonColors(containerColor = teamColor)) { Text("Entrenamiento", color = Color.White) }
                             Button(onClick = { viewModel.setSelectedTeamYear(teamYear); onDismiss(); navController.navigate("attendance") }, colors = ButtonDefaults.buttonColors(containerColor = teamColor)) { Text("Asistencia", color = Color.White) }
                         }
 
-                        // Fila 2: Notas (Centrado)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                             Button(onClick = { viewModel.setSelectedTeamYear(teamYear); onDismiss(); navController.navigate("notes/OTROS") }, colors = ButtonDefaults.buttonColors(containerColor = teamColor)) { Text("Notas", color = Color.White) }
                         }
@@ -357,7 +383,8 @@ fun AttendanceScreen(viewModel: BasketViewModel = hiltViewModel(), navController
     val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(text = "Asistencia $teamYear:", style = MaterialTheme.typography.headlineMedium)
+        // Utilizamos la variable teamName aquí para quitar el warning y que quede más claro
+        Text(text = "Asistencia $teamName:", style = MaterialTheme.typography.headlineMedium)
         Text(text = "$dayOfWeek ${date.dayOfMonth} de $monthName", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -382,7 +409,13 @@ fun AttendanceScreen(viewModel: BasketViewModel = hiltViewModel(), navController
                         }
                         .padding(16.dp)
                 ) {
-                    Text(text = player.name, style = MaterialTheme.typography.bodyLarge, color = Color.Black)
+                    val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontSize = 17.sp, // Tamaño ajustado
+                        color = Color.Black
+                    )
                 }
             }
         }
@@ -408,6 +441,7 @@ fun AttendanceScreen(viewModel: BasketViewModel = hiltViewModel(), navController
     }
 }
 
+@SuppressLint("MutableCollectionMutableState")
 @Composable
 fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController) {
     val selectedDateStr by viewModel.selectedDate.collectAsState()
@@ -445,7 +479,13 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 items(convocadas) { p ->
-                    Text("• ${p.name}", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, bottom = 4.dp))
+                    val displayName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
+                    Text(
+                        text = "• $displayName",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontSize = 17.sp, // Tamaño ajustado
+                        modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)
+                    )
                 }
 
                 item {
@@ -455,8 +495,18 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                 }
                 items(desconvocadas) { p ->
                     Column(modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)) {
-                        Text("• ${p.name}", style = MaterialTheme.typography.bodyLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Text("Motivo: ${match.unsummonedReasons[p.id]?.takeIf { it.isNotBlank() } ?: "Sin motivo especificado"}", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
+                        val displayName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
+                        Text(
+                            text = "• $displayName",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = 17.sp, // Tamaño ajustado
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Motivo: ${match.unsummonedReasons[p.id]?.takeIf { it.isNotBlank() } ?: "Sin motivo especificado"}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.DarkGray
+                        )
                     }
                 }
             }
@@ -517,12 +567,19 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(player.name, style = MaterialTheme.typography.bodyLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = containerColor)
+                        val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
+                        Text(
+                            text = displayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = 17.sp, // Tamaño ajustado
+                            fontWeight = FontWeight.Bold,
+                            color = containerColor
+                        )
 
                         if (isSummoned) {
-                            Icon(imageVector = androidx.compose.material.icons.Icons.Default.Check, contentDescription = null, tint = containerColor)
+                            Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = containerColor)
                         } else {
-                            Text(reasonsMap[player.id] ?: "", style = MaterialTheme.typography.bodyMedium, color = containerColor, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                            Text(reasonsMap[player.id] ?: "", style = MaterialTheme.typography.bodyMedium, color = containerColor, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -564,10 +621,11 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text("Motivo de desconvocatoria:", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
+                    val displayName = if (playerToUnsummon?.lastName?.isNotBlank() == true) "${playerToUnsummon?.name} ${playerToUnsummon?.lastName}" else playerToUnsummon?.name ?: ""
                     Text(
-                        text = playerToUnsummon?.name ?: "",
+                        text = displayName,
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        fontWeight = FontWeight.Bold,
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                 }
@@ -587,8 +645,8 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                             Text(
                                 text = reason,
                                 color = Color.White,
-                                fontSize = 18.sp,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                fontSize = 17.sp, // Tamaño ajustado en los botones también
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
@@ -732,7 +790,7 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
 
 @Composable
 fun StatsScreen(viewModel: BasketViewModel) {
-    var selectedTeam by remember { mutableStateOf(2013) }
+    var selectedTeam by remember { mutableIntStateOf(2013) }
 
     val attendances by viewModel.getAllAttendancesByTeam(selectedTeam).collectAsState(initial = emptyList())
     val allMatches by viewModel.matches.collectAsState()
@@ -790,7 +848,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                             color = if (selectedTeam == 2018) com.example.entrenamientos.ui.theme.PrebenjaminPink else com.example.entrenamientos.ui.theme.InfantilBlue
                         )
                         Icon(
-                            imageVector = if (isSeasonAttendanceExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
+                            imageVector = if (isSeasonAttendanceExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                             contentDescription = "Expandir/Colapsar",
                             tint = Color.Gray
                         )
@@ -814,7 +872,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                             colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
-                                Text("Media de Asistencia Global", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Text("Media de Asistencia Global", fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -830,7 +888,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                         text = if (isSeasonDetailsExpanded) "Ocultar" else "Detalles",
                                         color = com.example.entrenamientos.ui.theme.InfantilBlue,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                        fontWeight = FontWeight.Bold,
                                         modifier = Modifier.clickable { isSeasonDetailsExpanded = !isSeasonDetailsExpanded }.padding(start = 8.dp, top = 4.dp, bottom = 4.dp)
                                     )
                                 }
@@ -848,7 +906,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
 
                                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text("• ${player.name}", style = MaterialTheme.typography.bodyMedium)
-                                            Text("$pPres | $pJust | $pUnjust", style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                            Text("$pPres | $pJust | $pUnjust", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
@@ -897,7 +955,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                             color = if (selectedTeam == 2018) com.example.entrenamientos.ui.theme.PrebenjaminPink else com.example.entrenamientos.ui.theme.InfantilBlue
                         )
                         Icon(
-                            imageVector = if (isExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
+                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                             contentDescription = "Expandir/Colapsar",
                             tint = Color.Gray
                         )
@@ -925,7 +983,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                 colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
-                                    Text("Semana del ${weekStart.dayOfMonth} al ${weekEnd.dayOfMonth} de ${weekEnd.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).lowercase()}", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                    Text("Semana del ${weekStart.dayOfMonth} al ${weekEnd.dayOfMonth} de ${weekEnd.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).lowercase()}", fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(8.dp))
 
                                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -942,7 +1000,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                             text = if (isWeekDetailsExpanded) "Ocultar" else "Detalles",
                                             color = com.example.entrenamientos.ui.theme.InfantilBlue,
                                             style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                            fontWeight = FontWeight.Bold,
                                             modifier = Modifier.clickable { expandedWeekDetails[weekStart] = !isWeekDetailsExpanded }.padding(start = 8.dp, top = 4.dp, bottom = 4.dp)
                                         )
                                     }
@@ -960,7 +1018,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
 
                                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                                 Text("• ${player.name}", style = MaterialTheme.typography.bodyMedium)
-                                                Text("$pPres | $pJust | $pUnjust", style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                                Text("$pPres | $pJust | $pUnjust", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     }
@@ -1011,11 +1069,11 @@ fun StatsScreen(viewModel: BasketViewModel) {
                             colors = CardDefaults.cardColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue.copy(alpha = 0.15f))
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text("Puntos Anotados / partido: ${String.format(java.util.Locale.US, "%.1f", avgScored)} pts", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Text("Puntos Anotados / partido: ${String.format(java.util.Locale.US, "%.1f", avgScored)} pts", fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text("Puntos Recibidos / partido: ${String.format(java.util.Locale.US, "%.1f", avgReceived)} pts", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Text("Puntos Recibidos / partido: ${String.format(java.util.Locale.US, "%.1f", avgReceived)} pts", fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text("Tiros Libres (%): ${String.format(java.util.Locale.US, "%.1f", ftPercentage)}% ($totalFtMade/$totalFtAttempted)", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Text("Tiros Libres (%): ${String.format(java.util.Locale.US, "%.1f", ftPercentage)}% ($totalFtMade/$totalFtAttempted)", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1046,7 +1104,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                 color = com.example.entrenamientos.ui.theme.InfantilBlue
                             )
                             Icon(
-                                imageVector = if (isSeasonMatchesExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
+                                imageVector = if (isSeasonMatchesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                 contentDescription = "Expandir/Colapsar",
                                 tint = Color.Gray
                             )
@@ -1067,14 +1125,14 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                 colors = CardDefaults.cardColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue.copy(alpha = 0.15f))
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    Text("Media Convocadas / partido: ${String.format(java.util.Locale.US, "%.1f", avgSummoned)}", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = com.example.entrenamientos.ui.theme.SuccessGreen)
+                                    Text("Media Convocadas / partido: ${String.format(java.util.Locale.US, "%.1f", avgSummoned)}", fontWeight = FontWeight.Bold, color = com.example.entrenamientos.ui.theme.SuccessGreen)
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("Media Desconvocadas / partido: ${String.format(java.util.Locale.US, "%.1f", avgUnsummoned)}", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = com.example.entrenamientos.ui.theme.AttendanceRed)
+                                    Text("Media Desconvocadas / partido: ${String.format(java.util.Locale.US, "%.1f", avgUnsummoned)}", fontWeight = FontWeight.Bold, color = com.example.entrenamientos.ui.theme.AttendanceRed)
 
                                     // --- HISTORIAL DE DESCONVOCATORIAS ---
                                     Spacer(modifier = Modifier.height(16.dp))
                                     HorizontalDivider(color = Color.Gray, thickness = 1.dp, modifier = Modifier.padding(bottom = 8.dp))
-                                    Text("Historial de Desconvocatorias", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                    Text("Historial de Desconvocatorias", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(8.dp))
 
                                     val unsummonedStats = remember(matchesWithConvocatoria) {
@@ -1093,13 +1151,13 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                     } else {
                                         players.sortedBy { it.name }.forEach { player ->
                                             val playerStats = unsummonedStats[player.id]
-                                            if (playerStats != null && playerStats.isNotEmpty()) {
+                                            if (!playerStats.isNullOrEmpty()) {
                                                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
                                                     val totalPlayerUnsummoned = playerStats.values.sum()
                                                     Text(
                                                         text = "• ${player.name} ($totalPlayerUnsummoned ausencias totales)",
                                                         style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                                        fontWeight = FontWeight.Bold,
                                                         color = com.example.entrenamientos.ui.theme.AttendanceRed
                                                     )
                                                     playerStats.forEach { (reason, count) ->
@@ -1148,7 +1206,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                     color = com.example.entrenamientos.ui.theme.InfantilBlue
                                 )
                                 Icon(
-                                    imageVector = if (isExpanded) androidx.compose.material.icons.Icons.Default.KeyboardArrowUp else androidx.compose.material.icons.Icons.Default.KeyboardArrowDown,
+                                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                     contentDescription = "Expandir/Colapsar",
                                     tint = Color.Gray
                                 )
@@ -1175,7 +1233,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column {
-                                            Text("vs ${match.opponent}", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                            Text("vs ${match.opponent}", fontWeight = FontWeight.Bold)
                                             Text(formattedDate, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                         }
 
@@ -1184,13 +1242,13 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                                 Text(
                                                     text = "${match.summonedPlayers.size} Convocadas",
                                                     color = com.example.entrenamientos.ui.theme.SuccessGreen,
-                                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                                    fontWeight = FontWeight.Bold,
                                                     style = MaterialTheme.typography.bodyMedium
                                                 )
                                                 Text(
                                                     text = "${match.unsummonedReasons.size} Desconvocadas",
                                                     color = com.example.entrenamientos.ui.theme.AttendanceRed,
-                                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                                    fontWeight = FontWeight.Bold,
                                                     style = MaterialTheme.typography.bodyMedium
                                                 )
                                             }
@@ -1198,7 +1256,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                             Text(
                                                 text = "Pendiente",
                                                 color = Color.Gray,
-                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                                fontWeight = FontWeight.Bold
                                             )
                                         }
                                     }
@@ -1215,7 +1273,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
 @Composable
 fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     var activeTab by remember { mutableStateOf("JUGADORAS") } // "JUGADORAS", "HORARIOS", "PARTIDOS" o "FESTIVOS"
-    var selectedTeam by remember { mutableStateOf(2013) }
+    var selectedTeam by remember { mutableIntStateOf(2013) }
 
     val players by viewModel.getPlayersForTeam(selectedTeam).collectAsState(initial = emptyList())
     val allSchedules by viewModel.schedules.collectAsState()
@@ -1226,18 +1284,19 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     var showPlayerDialog by remember { mutableStateOf(false) }
     var playerToEdit by remember { mutableStateOf<com.example.entrenamientos.data.Player?>(null) }
     var playerNameInput by remember { mutableStateOf("") }
+    var playerLastNameInput by remember { mutableStateOf("") } // <-- NUEVO ESTADO
 
     // Estados Horarios
     var showScheduleDialog by remember { mutableStateOf(false) }
     var scheduleToEdit by remember { mutableStateOf<com.example.entrenamientos.data.TrainingSchedule?>(null) }
-    var scheduleDayInput by remember { mutableStateOf(1) }
+    var scheduleDayInput by remember { mutableIntStateOf(1) }
     var scheduleStartInput by remember { mutableStateOf("17:00") }
     var scheduleEndInput by remember { mutableStateOf("18:30") }
     var scheduleError by remember { mutableStateOf("") }
 
     // Estados Partidos (WIZARD)
     var showMatchDialog by remember { mutableStateOf(false) }
-    var matchStep by remember { mutableStateOf(1) }
+    var matchStep by remember { mutableIntStateOf(1) }
     var matchToEdit by remember { mutableStateOf<com.example.entrenamientos.data.Match?>(null) }
     var matchDateInput by remember { mutableStateOf("05-09-2026") }
     var matchTimeInput by remember { mutableStateOf("10:00") }
@@ -1304,97 +1363,200 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
         }
 
         // CONTENIDO
-        if (activeTab == "JUGADORAS") {
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(players) { player ->
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(text = player.name, style = MaterialTheme.typography.bodyLarge)
-                        Row {
-                            IconButton(onClick = { playerToEdit = player; playerNameInput = player.name; showPlayerDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
-                            IconButton(onClick = { viewModel.deletePlayer(player) }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+        when (activeTab) {
+            "JUGADORAS" -> {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(players) { player ->
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            // Muestra Nombre + Apellido
+                            val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
+                            Text(text = displayName, style = MaterialTheme.typography.bodyLarge)
+                            Row {
+                                IconButton(onClick = { playerToEdit = player; playerNameInput = player.name; playerLastNameInput = player.lastName; showPlayerDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
+                                IconButton(onClick = { viewModel.deletePlayer(player) }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+                            }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = { playerToEdit = null; playerNameInput = ""; playerLastNameInput = ""; showPlayerDialog = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Añadir Nueva Jugadora", color = Color.Black) }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { playerToEdit = null; playerNameInput = ""; showPlayerDialog = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Añadir Nueva Jugadora", color = Color.Black) }
-        } else if (activeTab == "HORARIOS") {
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(teamSchedules) { schedule ->
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column {
-                            Text(text = daysOfWeek[schedule.dayOfWeek - 1], style = MaterialTheme.typography.bodyLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                            Text(text = "${schedule.startTime} - ${schedule.endTime}", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                        }
-                        Row {
-                            IconButton(onClick = { scheduleToEdit = schedule; scheduleDayInput = schedule.dayOfWeek; scheduleStartInput = schedule.startTime; scheduleEndInput = schedule.endTime; scheduleError = ""; showScheduleDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
-                            IconButton(onClick = { viewModel.deleteSchedule(schedule) }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+            "HORARIOS" -> {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(teamSchedules) { schedule ->
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column {
+                                Text(text = daysOfWeek[schedule.dayOfWeek - 1], style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                Text(text = "${schedule.startTime} - ${schedule.endTime}", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                            }
+                            Row {
+                                IconButton(onClick = { scheduleToEdit = schedule; scheduleDayInput = schedule.dayOfWeek; scheduleStartInput = schedule.startTime; scheduleEndInput = schedule.endTime; scheduleError = ""; showScheduleDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
+                                IconButton(onClick = { viewModel.deleteSchedule(schedule) }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+                            }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = { scheduleToEdit = null; scheduleDayInput = 1; scheduleStartInput = "17:00"; scheduleEndInput = "18:00"; scheduleError = ""; showScheduleDialog = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Añadir Horario", color = Color.Black) }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { scheduleToEdit = null; scheduleDayInput = 1; scheduleStartInput = "17:00"; scheduleEndInput = "18:00"; scheduleError = ""; showScheduleDialog = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Añadir Horario", color = Color.Black) }
-        } else if (activeTab == "PARTIDOS") {
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(allMatches) { match ->
-                    val dateObj = java.time.LocalDate.parse(match.date)
-                    val dayOfWeekName = dateObj.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
-                    val monthName = dateObj.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+            "PARTIDOS" -> {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(allMatches) { match ->
+                        val dateObj = java.time.LocalDate.parse(match.date)
+                        val dayOfWeekName = dateObj.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+                        val monthName = dateObj.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
 
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "$dayOfWeekName ${dateObj.dayOfMonth} de $monthName - ${match.time}", style = MaterialTheme.typography.bodyLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                            Text(text = "Polideportivo ${match.location}", style = MaterialTheme.typography.bodyMedium)
-                            Text(text = if (match.isLocal) "CD Huerto - ${match.opponent}" else "${match.opponent} - CD Huerto", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        Row {
-                            IconButton(onClick = { matchToEdit = match; matchStep = 1; val parts = match.date.split("-"); matchDateInput = "${parts[2]}-${parts[1]}-${parts[0]}"; matchTimeInput = match.time; matchIsLocalInput = match.isLocal; matchLocationInput = match.location; matchOpponentInput = match.opponent; showMatchDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
-                            IconButton(onClick = { viewModel.deleteMatch(match) }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = "$dayOfWeekName ${dateObj.dayOfMonth} de $monthName - ${match.time}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                Text(text = "Polideportivo ${match.location}", style = MaterialTheme.typography.bodyMedium)
+                                Text(text = if (match.isLocal) "CD Huerto - ${match.opponent}" else "${match.opponent} - CD Huerto", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Row {
+                                IconButton(onClick = { matchToEdit = match; matchStep = 1; val parts = match.date.split("-"); matchDateInput = "${parts[2]}-${parts[1]}-${parts[0]}"; matchTimeInput = match.time; matchIsLocalInput = match.isLocal; matchLocationInput = match.location; matchOpponentInput = match.opponent; showMatchDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
+                                IconButton(onClick = { viewModel.deleteMatch(match) }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+                            }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = { matchToEdit = null; matchStep = 1; matchDateInput = "05-09-2026"; matchTimeInput = "10:00"; matchIsLocalInput = true; matchLocationInput = ""; matchOpponentInput = ""; showMatchDialog = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Añadir Partido", color = Color.Black) }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { matchToEdit = null; matchStep = 1; matchDateInput = "05-09-2026"; matchTimeInput = "10:00"; matchIsLocalInput = true; matchLocationInput = ""; matchOpponentInput = ""; showMatchDialog = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Añadir Partido", color = Color.Black) }
-        } else if (activeTab == "FESTIVOS") {
-            FestivosSettingsTab(viewModel)
+            "FESTIVOS" -> {
+                FestivosSettingsTab(viewModel)
+            }
         }
     }
 
     // DIÁLOGOS (Jugadoras / Horarios)
     if (showPlayerDialog) {
-        AlertDialog(
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = { showPlayerDialog = false },
-            title = { Text(if (playerToEdit == null) "Añadir Jugadora" else "Editar Jugadora") },
-            text = { OutlinedTextField(value = playerNameInput, onValueChange = { playerNameInput = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
-            confirmButton = { Button(onClick = { if (playerNameInput.isNotBlank()) { if (playerToEdit == null) viewModel.addPlayer(playerNameInput, selectedTeam) else viewModel.updatePlayer(playerToEdit!!.copy(name = playerNameInput)); showPlayerDialog = false } }, colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Guardar", color = Color.Black) } },
-            dismissButton = { TextButton(onClick = { showPlayerDialog = false }) { Text("Cancelar", color = Color.Gray) } }
-        )
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.98f)
+                    .padding(8.dp),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = if (playerToEdit == null) "Añadir Jugadora" else "Editar Jugadora",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = playerNameInput,
+                        onValueChange = { playerNameInput = it },
+                        label = { Text("Nombre") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = playerLastNameInput,
+                        onValueChange = { playerLastNameInput = it },
+                        label = { Text("Apellido") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { showPlayerDialog = false },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                        ) { Text("Cancelar", color = Color.White) }
+
+                        Button(
+                            onClick = {
+                                if (playerNameInput.isNotBlank()) {
+                                    if (playerToEdit == null) viewModel.addPlayer(playerNameInput, playerLastNameInput, selectedTeam)
+                                    else viewModel.updatePlayer(playerToEdit!!.copy(name = playerNameInput, lastName = playerLastNameInput))
+                                    showPlayerDialog = false
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                        ) { Text("Guardar", color = Color.Black) }
+                    }
+                }
+            }
+        }
     }
 
     if (showScheduleDialog) {
-        AlertDialog(
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = { showScheduleDialog = false },
-            title = { Text(if (scheduleToEdit == null) "Nuevo Horario" else "Editar Horario") },
-            text = {
-                Column {
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.98f)
+                    .padding(8.dp),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = if (scheduleToEdit == null) "Nuevo Horario" else "Editar Horario",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     if (scheduleError.isNotEmpty()) { Text(text = scheduleError, color = com.example.entrenamientos.ui.theme.AttendanceRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp)) }
                     Text("Día de la semana:", style = MaterialTheme.typography.labelSmall)
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Button(onClick = { if (scheduleDayInput > 1) scheduleDayInput-- else scheduleDayInput = 5 }) { Text("-") }
-                        Text("${daysOfWeek[scheduleDayInput - 1]}", modifier = Modifier.align(Alignment.CenterVertically))
+                        Text(daysOfWeek[scheduleDayInput - 1])
                         Button(onClick = { if (scheduleDayInput < 5) scheduleDayInput++ else scheduleDayInput = 1 }) { Text("+") }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
-                    androidx.compose.material3.OutlinedButton(onClick = { val parts = scheduleStartInput.split(":"); val h = parts.getOrNull(0)?.toIntOrNull() ?: 17; val m = parts.getOrNull(1)?.toIntOrNull() ?: 0; android.app.TimePickerDialog(context, { _, hour, minute -> scheduleStartInput = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute) }, h, m, true).show() }, modifier = Modifier.fillMaxWidth()) { Text("Hora Inicio: $scheduleStartInput", color = Color.Black) }
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = {
+                            val parts = scheduleStartInput.split(":")
+                            val h = parts.getOrNull(0)?.toIntOrNull() ?: 17
+                            val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                            android.app.TimePickerDialog(context, { _, hour, minute -> scheduleStartInput = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute) }, h, m, true).show()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Hora Inicio: $scheduleStartInput", color = Color.Black) }
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    androidx.compose.material3.OutlinedButton(onClick = { val parts = scheduleEndInput.split(":"); val h = parts.getOrNull(0)?.toIntOrNull() ?: 18; val m = parts.getOrNull(1)?.toIntOrNull() ?: 30; android.app.TimePickerDialog(context, { _, hour, minute -> scheduleEndInput = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute) }, h, m, true).show() }, modifier = Modifier.fillMaxWidth()) { Text("Hora Fin: $scheduleEndInput", color = Color.Black) }
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = {
+                            val parts = scheduleEndInput.split(":")
+                            val h = parts.getOrNull(0)?.toIntOrNull() ?: 18
+                            val m = parts.getOrNull(1)?.toIntOrNull() ?: 30
+                            android.app.TimePickerDialog(context, { _, hour, minute -> scheduleEndInput = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute) }, h, m, true).show()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Hora Fin: $scheduleEndInput", color = Color.Black) }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { showScheduleDialog = false },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                        ) { Text("Cancelar", color = Color.White) }
+
+                        Button(
+                            onClick = {
+                                val newSchedule = com.example.entrenamientos.data.TrainingSchedule(id = scheduleToEdit?.id ?: 0, teamYear = selectedTeam, dayOfWeek = scheduleDayInput, startTime = scheduleStartInput, endTime = scheduleEndInput)
+                                viewModel.addOrUpdateSchedule(newSchedule, onSuccess = { showScheduleDialog = false }, onError = { errorMsg -> scheduleError = errorMsg })
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                        ) { Text("Guardar", color = Color.Black) }
+                    }
                 }
-            },
-            confirmButton = { Button(onClick = { val newSchedule = com.example.entrenamientos.data.TrainingSchedule(id = scheduleToEdit?.id ?: 0, teamYear = selectedTeam, dayOfWeek = scheduleDayInput, startTime = scheduleStartInput, endTime = scheduleEndInput); viewModel.addOrUpdateSchedule(newSchedule, onSuccess = { showScheduleDialog = false }, onError = { errorMsg -> scheduleError = errorMsg }) }, colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Guardar", color = Color.Black) } },
-            dismissButton = { TextButton(onClick = { showScheduleDialog = false }) { Text("Cancelar", color = Color.Gray) } }
-        )
+            }
+        }
     }
 
     // WIZARD DE PARTIDOS PERSONALIZADO
@@ -1418,7 +1580,12 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 shape = MaterialTheme.shapes.medium
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(titleStep, style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        text = titleStep,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center // TEXTO CENTRADO
+                    )
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Contenido del paso
@@ -1511,7 +1678,7 @@ fun FestivosSettingsTab(viewModel: BasketViewModel) {
                         try {
                             val parts = newHolidayDate.split("-")
                             cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt())
-                        } catch (e: Exception) {}
+                        } catch (_: Exception) {}
                     }
 
                     val y = cal.get(java.util.Calendar.YEAR)
@@ -1526,7 +1693,7 @@ fun FestivosSettingsTab(viewModel: BasketViewModel) {
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = if (newHolidayDate.isEmpty()) "Seleccionar fecha" else newHolidayDate,
+                    text = newHolidayDate.ifEmpty { "Seleccionar fecha" },
                     color = if (newHolidayDate.isEmpty()) Color.Gray else Color.Black
                 )
             }
@@ -1570,10 +1737,10 @@ fun FestivosSettingsTab(viewModel: BasketViewModel) {
                     val hDate = java.time.LocalDate.parse(holiday.date)
                     val formatted = "${hDate.dayOfMonth} de ${hDate.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))} ${hDate.year}"
 
-                    Text(formatted, style = MaterialTheme.typography.bodyLarge, color = Color.Red, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text(formatted, style = MaterialTheme.typography.bodyLarge, color = Color.Red, fontWeight = FontWeight.Bold)
 
                     IconButton(onClick = { viewModel.removeHoliday(holiday) }) {
-                        Icon(androidx.compose.material.icons.Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
                     }
                 }
             }

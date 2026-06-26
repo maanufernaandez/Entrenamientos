@@ -20,9 +20,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    object Calendar : Screen("calendar", "Calendario", androidx.compose.material.icons.Icons.Default.DateRange)
-    object Stats : Screen("stats", "Estadísticas", androidx.compose.material.icons.Icons.Default.BarChart)
-    object Settings : Screen("settings", "Ajustes", androidx.compose.material.icons.Icons.Default.Settings)
+    data object Calendar : Screen("calendar", "Calendario", androidx.compose.material.icons.Icons.Default.DateRange)
+    data object Stats : Screen("stats", "Estadísticas", androidx.compose.material.icons.Icons.Default.BarChart)
+    data object Settings : Screen("settings", "Ajustes", androidx.compose.material.icons.Icons.Default.Settings)
 }
 
 @Composable

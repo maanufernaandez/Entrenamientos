@@ -7,5 +7,6 @@ import androidx.room.PrimaryKey
 data class Player(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    val teamYear: Int // 2018 para Prebenjamín, 2013 para Infantil
+    val lastName: String = "",
+    val teamYear: Int
 )
