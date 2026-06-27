@@ -1,6 +1,7 @@
 package com.example.entrenamientos.ui.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Settings
@@ -12,23 +13,28 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.entrenamientos.ui.BasketViewModel
+import com.example.entrenamientos.ui.screens.*
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    data object Calendar : Screen("calendar", "Calendario", androidx.compose.material.icons.Icons.Default.DateRange)
-    data object Stats : Screen("stats", "Estadísticas", androidx.compose.material.icons.Icons.Default.BarChart)
-    data object Settings : Screen("settings", "Ajustes", androidx.compose.material.icons.Icons.Default.Settings)
+    data object Calendar : Screen("calendar", "Calendario", Icons.Default.DateRange)
+    data object Stats : Screen("stats", "Estadísticas", Icons.Default.BarChart)
+    data object Settings : Screen("settings", "Ajustes", Icons.Default.Settings)
 }
 
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
     val items = listOf(Screen.Calendar, Screen.Stats, Screen.Settings)
+
+    val sharedViewModel: BasketViewModel = hiltViewModel()
 
     Scaffold(
         bottomBar = {
@@ -55,34 +61,32 @@ fun AppNavigation() {
         }
     ) { innerPadding ->
 
-        val sharedViewModel: com.example.entrenamientos.ui.BasketViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-
         NavHost(
             navController = navController,
-            startDestination = Screen.Calendar.route, // <-- Arranca directamente en el calendario
+            startDestination = Screen.Calendar.route,
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Calendar.route) {
-                com.example.entrenamientos.ui.screens.CalendarScreen(viewModel = sharedViewModel, navController = navController)
+                CalendarScreen(viewModel = sharedViewModel, navController = navController)
             }
             composable(Screen.Stats.route) {
-                com.example.entrenamientos.ui.screens.StatsScreen(viewModel = sharedViewModel)
+                StatsScreen(viewModel = sharedViewModel)
             }
             composable(Screen.Settings.route) {
-                com.example.entrenamientos.ui.screens.SettingsScreen(viewModel = sharedViewModel)
+                SettingsScreen(viewModel = sharedViewModel)
             }
             composable("attendance") {
-                com.example.entrenamientos.ui.screens.AttendanceScreen(viewModel = sharedViewModel, navController = navController)
+                AttendanceScreen(viewModel = sharedViewModel, navController = navController)
             }
             composable("notes/{type}") { backStackEntry ->
                 val type = backStackEntry.arguments?.getString("type") ?: "ENTRENAMIENTO"
-                com.example.entrenamientos.ui.screens.TrainingNoteScreen(viewModel = sharedViewModel, navController = navController, noteType = type)
+                TrainingNoteScreen(viewModel = sharedViewModel, navController = navController, noteType = type)
             }
             composable("convocatoria") {
-                com.example.entrenamientos.ui.screens.ConvocatoriaScreen(viewModel = sharedViewModel, navController = navController)
+                ConvocatoriaScreen(viewModel = sharedViewModel, navController = navController)
             }
             composable("resultado") {
-                com.example.entrenamientos.ui.screens.ResultadoScreen(viewModel = sharedViewModel, navController = navController)
+                ResultadoScreen(viewModel = sharedViewModel, navController = navController)
             }
         }
     }

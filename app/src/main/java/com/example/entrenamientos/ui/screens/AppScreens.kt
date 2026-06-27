@@ -876,14 +876,12 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    // Fila de estadísticas dividida en 3 partes exactas (33/33/33)
                                     Row(modifier = Modifier.weight(1f)) {
                                         Text("✅ ${String.format(java.util.Locale.US, "%.1f", avgPresent)}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                                         Text("⚠️ ${String.format(java.util.Locale.US, "%.1f", avgJustified)}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                                         Text("❌ ${String.format(java.util.Locale.US, "%.1f", avgUnjustified)}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                                     }
 
-                                    // Botón Detalles
                                     Text(
                                         text = if (isSeasonDetailsExpanded) "Ocultar" else "Detalles",
                                         color = com.example.entrenamientos.ui.theme.InfantilBlue,
@@ -905,7 +903,8 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                         val pUnjust = pAtts.count { it.status == 2 }
 
                                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                            Text("• ${player.name}", style = MaterialTheme.typography.bodyMedium)
+                                            val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
+                                            Text("• $displayName", style = MaterialTheme.typography.bodyMedium)
                                             Text("$pPres | $pJust | $pUnjust", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                         }
                                     }
@@ -987,14 +986,12 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                     Spacer(modifier = Modifier.height(8.dp))
 
                                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                        // Fila de estadísticas dividida en 3 partes exactas (33/33/33)
                                         Row(modifier = Modifier.weight(1f)) {
                                             Text("✅ ${String.format(java.util.Locale.US, "%.1f", avgWPresent)}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                                             Text("⚠️ ${String.format(java.util.Locale.US, "%.1f", avgWJustified)}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                                             Text("❌ ${String.format(java.util.Locale.US, "%.1f", avgWUnjustified)}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                                         }
 
-                                        // Botón Detalles
                                         val isWeekDetailsExpanded = expandedWeekDetails[weekStart] ?: false
                                         Text(
                                             text = if (isWeekDetailsExpanded) "Ocultar" else "Detalles",
@@ -1017,7 +1014,8 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                             val pUnjust = pAtts.count { it.status == 2 }
 
                                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                                Text("• ${player.name}", style = MaterialTheme.typography.bodyMedium)
+                                                val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
+                                                Text("• $displayName", style = MaterialTheme.typography.bodyMedium)
                                                 Text("$pPres | $pJust | $pUnjust", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                             }
                                         }
@@ -1154,8 +1152,9 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                             if (!playerStats.isNullOrEmpty()) {
                                                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
                                                     val totalPlayerUnsummoned = playerStats.values.sum()
+                                                    val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
                                                     Text(
-                                                        text = "• ${player.name} ($totalPlayerUnsummoned ausencias totales)",
+                                                        text = "• $displayName ($totalPlayerUnsummoned ausencias totales)",
                                                         style = MaterialTheme.typography.bodyMedium,
                                                         fontWeight = FontWeight.Bold,
                                                         color = com.example.entrenamientos.ui.theme.AttendanceRed
