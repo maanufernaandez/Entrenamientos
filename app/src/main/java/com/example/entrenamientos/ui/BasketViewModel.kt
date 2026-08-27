@@ -59,17 +59,46 @@ class BasketViewModel @Inject constructor(
             repository.getAllHolidays().collect { list ->
                 if (list.isEmpty()) {
                     val defaultHolidays = listOf(
-                        Holiday("2026-10-12"), // Fiesta Nacional de España
-                        Holiday("2026-11-01"), // Todos los Santos
-                        Holiday("2026-12-06"), // Día de la Constitución
-                        Holiday("2026-12-08"), // Inmaculada Concepción
-                        Holiday("2026-12-24"), // Nochebuena
-                        Holiday("2026-12-25"), // Navidad
-                        Holiday("2026-12-31"), // Nochevieja
-                        Holiday("2027-01-01"), // Año Nuevo
-                        Holiday("2027-01-06"), // Reyes Magos
-                        Holiday("2027-03-25"), // Jueves Santo (2027)
-                        Holiday("2027-03-26"), // Viernes Santo (2027)
+                        Holiday("2026-10-12"),
+                        Holiday("2026-10-21"),
+                        Holiday("2026-10-30"),
+                        Holiday("2026-11-02"),
+                        Holiday("2026-11-30"),
+                        Holiday("2026-12-03"),
+                        Holiday("2026-12-04"),
+                        Holiday("2026-12-07"),
+                        Holiday("2026-12-08"),
+                        Holiday("2026-12-22"),
+                        Holiday("2026-12-23"),
+                        Holiday("2026-12-24"),
+                        Holiday("2026-12-25"),
+                        Holiday("2026-12-26"),
+                        Holiday("2026-12-27"),
+                        Holiday("2026-12-28"),
+                        Holiday("2026-12-29"),
+                        Holiday("2026-12-30"),
+                        Holiday("2026-12-31"),
+                        Holiday("2027-01-01"),
+                        Holiday("2027-01-02"),
+                        Holiday("2027-01-03"),
+                        Holiday("2027-01-04"),
+                        Holiday("2027-01-05"),
+                        Holiday("2027-01-06"),
+                        Holiday("2027-01-07"),
+                        Holiday("2027-01-08"),
+                        Holiday("2027-02-08"),
+                        Holiday("2027-02-09"),
+                        Holiday("2027-03-19"),
+                        Holiday("2027-03-25"),
+                        Holiday("2027-03-26"),
+                        Holiday("2027-03-27"),
+                        Holiday("2027-03-28"),
+                        Holiday("2027-03-29"),
+                        Holiday("2027-03-30"),
+                        Holiday("2027-03-31"),
+                        Holiday("2027-04-01"),
+                        Holiday("2027-04-02"),
+                        Holiday("2027-04-30"),
                     )
                     defaultHolidays.forEach { repository.insertHoliday(it) }
                 } else {
