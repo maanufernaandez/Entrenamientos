@@ -129,7 +129,6 @@ class BasketViewModel @Inject constructor(
                     Player(name = "Emma", lastName = "Berango", teamYear = 2018),
                     Player(name = "Vega", lastName = "Sadaba", teamYear = 2018),
                     Player(name = "Lara", lastName = "Sadaba", teamYear = 2018),
-                    Player(name = "Crismeily", lastName = "Moran", teamYear = 2018),
                     Player(name = "Martina", lastName = "del Pozo", teamYear = 2018),
                     Player(name = "Izan", lastName = "Marin", teamYear = 2018)
                 )
@@ -154,7 +153,9 @@ class BasketViewModel @Inject constructor(
                     Player(name = "Alba", lastName = "Rodriguez", teamYear = 2013),
                     Player(name = "Arianna", lastName = "Vieira", teamYear = 2013),
                     Player(name = "Paula", lastName = "Zamarreño", teamYear = 2013),
-                    Player(name = "Salome", lastName = "Militino", teamYear = 2013)
+                    Player(name = "Salome", lastName = "Militino", teamYear = 2013),
+                    Player(name = "Ainhoa", lastName = "Ainhoa", teamYear = 2013),
+                    Player(name = "Miriam", lastName = "Miriam", teamYear = 2013)
                 )
                 defaultInfantiles.forEach { player ->
                     repository.addPlayer(player) // Corregido: addPlayer en lugar de insertPlayer
