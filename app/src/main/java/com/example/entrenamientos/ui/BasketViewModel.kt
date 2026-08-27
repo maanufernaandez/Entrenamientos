@@ -141,7 +141,7 @@ class BasketViewModel @Inject constructor(
             val currentInfantiles = repository.getPlayers(2013).first()
             if (currentInfantiles.isEmpty()) {
                 val defaultInfantiles = listOf(
-                    Player(name = "Mayte", lastName = "Mayte", teamYear = 2013),
+                    Player(name = "Mayte", lastName = "Bator", teamYear = 2013),
                     Player(name = "Martina", lastName = "Berrio", teamYear = 2013),
                     Player(name = "Maria", lastName = "Del Pozo", teamYear = 2013),
                     Player(name = "Nahia", lastName = "Altagracia", teamYear = 2013),
@@ -349,5 +349,25 @@ class BasketViewModel @Inject constructor(
             currDate = currDate.plusDays(1)
         }
         return Pair(true, null)
+    }
+
+    // --- BORRADOR DE CONVOCATORIA (Para mantener estado al cambiar de pestaña) ---
+    var draftMatchDate: String? = null
+    var draftSummonedIds: Set<Long>? = null
+    var draftReasonsMap: Map<Long, String>? = null
+    var draftIsEditMode: Boolean? = null
+
+    fun saveDraftConvocatoria(date: String, summoned: Set<Long>, reasons: Map<Long, String>, isEdit: Boolean) {
+        draftMatchDate = date
+        draftSummonedIds = summoned
+        draftReasonsMap = reasons
+        draftIsEditMode = isEdit
+    }
+
+    fun clearDraftConvocatoria() {
+        draftMatchDate = null
+        draftSummonedIds = null
+        draftReasonsMap = null
+        draftIsEditMode = null
     }
 }

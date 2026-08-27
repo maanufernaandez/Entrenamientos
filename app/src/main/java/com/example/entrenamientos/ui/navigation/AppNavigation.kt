@@ -34,6 +34,7 @@ fun AppNavigation() {
     val navController = rememberNavController()
     val items = listOf(Screen.Calendar, Screen.Stats, Screen.Settings)
 
+    // Declaramos una instancia única del ViewModel para ser compartida en toda la navegación
     val sharedViewModel: BasketViewModel = hiltViewModel()
 
     Scaffold(
@@ -64,7 +65,12 @@ fun AppNavigation() {
         NavHost(
             navController = navController,
             startDestination = Screen.Calendar.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            // --- ANULACIÓN DE ANIMACIONES DE TRANSICIÓN ---
+            enterTransition = { androidx.compose.animation.EnterTransition.None },
+            exitTransition = { androidx.compose.animation.ExitTransition.None },
+            popEnterTransition = { androidx.compose.animation.EnterTransition.None },
+            popExitTransition = { androidx.compose.animation.ExitTransition.None }
         ) {
             composable(Screen.Calendar.route) {
                 CalendarScreen(viewModel = sharedViewModel, navController = navController)

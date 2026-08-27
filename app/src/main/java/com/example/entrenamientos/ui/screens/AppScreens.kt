@@ -393,7 +393,6 @@ fun AttendanceScreen(viewModel: BasketViewModel = hiltViewModel(), navController
     val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        // Utilizamos la variable teamName aquí para quitar el warning y que quede más claro
         Text(text = "Asistencia $teamName:", style = MaterialTheme.typography.headlineMedium)
         Text(text = "$dayOfWeek ${date.dayOfMonth} de $monthName", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
@@ -423,7 +422,7 @@ fun AttendanceScreen(viewModel: BasketViewModel = hiltViewModel(), navController
                     Text(
                         text = displayName,
                         style = MaterialTheme.typography.bodyLarge,
-                        fontSize = 17.sp, // Tamaño ajustado
+                        fontSize = 17.sp,
                         color = Color.Black
                     )
                 }
@@ -461,15 +460,50 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
     val players by viewModel.getPlayersForTeam(2013).collectAsState(initial = emptyList())
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    var isEditMode by remember { mutableStateOf(!match.isConvocatoriaSaved) }
+    val hasDraft = viewModel.draftMatchDate == selectedDateStr
+
+    var isEditMode by remember(match) {
+        mutableStateOf(if (hasDraft) viewModel.draftIsEditMode ?: !match.isConvocatoriaSaved else !match.isConvocatoriaSaved)
+    }
 
     var summonedIds by remember(players, match) {
         mutableStateOf(
-            if (match.isConvocatoriaSaved) match.summonedPlayers.toSet()
+            if (hasDraft && viewModel.draftSummonedIds != null) viewModel.draftSummonedIds!!
+            else if (match.isConvocatoriaSaved) match.summonedPlayers.toSet()
             else players.map { it.id }.toSet()
         )
     }
-    var reasonsMap by remember { mutableStateOf(match.unsummonedReasons.toMutableMap()) }
+    var reasonsMap by remember(match) {
+        mutableStateOf(
+            if (hasDraft && viewModel.draftReasonsMap != null) viewModel.draftReasonsMap!!.toMutableMap()
+            else match.unsummonedReasons.toMutableMap()
+        )
+    }
+
+    var shouldSaveDraft by remember { mutableStateOf(true) }
+    val currentSummonedIds = androidx.compose.runtime.rememberUpdatedState(summonedIds)
+    val currentReasonsMap = androidx.compose.runtime.rememberUpdatedState(reasonsMap)
+    val currentIsEditMode = androidx.compose.runtime.rememberUpdatedState(isEditMode)
+
+    androidx.compose.runtime.DisposableEffect(selectedDateStr) {
+        onDispose {
+            if (shouldSaveDraft) {
+                viewModel.saveDraftConvocatoria(
+                    selectedDateStr,
+                    currentSummonedIds.value,
+                    currentReasonsMap.value.toMap(),
+                    currentIsEditMode.value
+                )
+            } else {
+                viewModel.clearDraftConvocatoria()
+            }
+        }
+    }
+
+    androidx.activity.compose.BackHandler {
+        shouldSaveDraft = false
+        navController.popBackStack()
+    }
 
     var playerToUnsummon by remember { mutableStateOf<com.example.entrenamientos.data.Player?>(null) }
     val reasonOptions = listOf("Rotación", "Lesión", "Falta a entrenamientos", "Castigada", "No puede ir")
@@ -493,7 +527,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                     Text(
                         text = "• $displayName",
                         style = MaterialTheme.typography.bodyLarge,
-                        fontSize = 17.sp, // Tamaño ajustado
+                        fontSize = 17.sp,
                         modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)
                     )
                 }
@@ -509,7 +543,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                         Text(
                             text = "• $displayName",
                             style = MaterialTheme.typography.bodyLarge,
-                            fontSize = 17.sp, // Tamaño ajustado
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
@@ -524,7 +558,10 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
             Spacer(modifier = Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Button(
-                    onClick = { navController.popBackStack() },
+                    onClick = {
+                        shouldSaveDraft = false
+                        navController.popBackStack()
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
                     modifier = Modifier.weight(1f)
                 ) { Text("Volver") }
@@ -533,6 +570,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
 
                 Button(
                     onClick = {
+                        shouldSaveDraft = false
                         val resetMatch = match.copy(isConvocatoriaSaved = false, summonedPlayers = emptyList(), unsummonedReasons = emptyMap())
                         viewModel.addOrUpdateMatch(resetMatch)
                         navController.popBackStack()
@@ -581,7 +619,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                         Text(
                             text = displayName,
                             style = MaterialTheme.typography.bodyLarge,
-                            fontSize = 17.sp, // Tamaño ajustado
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = containerColor
                         )
@@ -605,6 +643,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                             android.widget.Toast.LENGTH_LONG
                         ).show()
                     } else {
+                        shouldSaveDraft = false
                         val updatedMatch = match.copy(
                             isConvocatoriaSaved = true,
                             summonedPlayers = summonedIds.toList(),
@@ -625,7 +664,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
             onDismissRequest = { playerToUnsummon = null },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
             modifier = Modifier
-                .fillMaxWidth(0.95f) // Ocupa el 95% del ancho de la pantalla
+                .fillMaxWidth(0.95f)
                 .padding(16.dp),
             title = {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -655,7 +694,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                             Text(
                                 text = reason,
                                 color = Color.White,
-                                fontSize = 17.sp, // Tamaño ajustado en los botones también
+                                fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -1037,18 +1076,41 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 if (playedMatches.isEmpty()) {
                     item { Text("No hay partidos jugados todavía.", color = Color.Gray) }
                 } else {
+                    var totalWins = 0
+                    var totalLosses = 0
+                    var localWins = 0
+                    var localLosses = 0
+                    var visitorWins = 0
+                    var visitorLosses = 0
                     var totalScored = 0
                     var totalReceived = 0
                     var totalFtMade = 0
                     var totalFtAttempted = 0
 
                     playedMatches.forEach { m ->
+                        val localScore = m.resultLocal ?: 0
+                        val visitorScore = m.resultVisitor ?: 0
+
                         if (m.isLocal) {
-                            totalScored += m.resultLocal ?: 0
-                            totalReceived += m.resultVisitor ?: 0
+                            totalScored += localScore
+                            totalReceived += visitorScore
+                            if (localScore > visitorScore) {
+                                totalWins++
+                                localWins++
+                            } else if (localScore < visitorScore) {
+                                totalLosses++
+                                localLosses++
+                            }
                         } else {
-                            totalScored += m.resultVisitor ?: 0
-                            totalReceived += m.resultLocal ?: 0
+                            totalScored += visitorScore
+                            totalReceived += localScore
+                            if (visitorScore > localScore) {
+                                totalWins++
+                                visitorWins++
+                            } else if (visitorScore < localScore) {
+                                totalLosses++
+                                visitorLosses++
+                            }
                         }
                         totalFtMade += m.ftMade
                         totalFtAttempted += m.ftAttempted
@@ -1064,6 +1126,12 @@ fun StatsScreen(viewModel: BasketViewModel) {
                             colors = CardDefaults.cardColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue.copy(alpha = 0.15f))
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
+                                Text("Resultados: $totalWins / $totalLosses", fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Resultados (Local): $localWins / $localLosses", fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Resultados (Visitante): $visitorWins / $visitorLosses", fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text("Puntos Anotados / partido: ${String.format(java.util.Locale.US, "%.1f", avgScored)} pts", fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text("Puntos Recibidos / partido: ${String.format(java.util.Locale.US, "%.1f", avgReceived)} pts", fontWeight = FontWeight.Bold)
@@ -1278,7 +1346,6 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
 
     // --- ESCALADO RESPONSIVO ---
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    // Reducimos el límite superior a 1.25f para que no crezca demasiado en pantallas grandes
     val scale = (configuration.screenWidthDp / 360f).coerceIn(0.85f, 1.25f)
     fun sp(base: Int) = (base * scale).sp
     val buttonPaddingH = (14 * scale).dp
@@ -1320,7 +1387,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Ajustes", style = MaterialTheme.typography.headlineMedium.copy(fontSize = sp(24))) // Tamaño reducido
+        Text("Ajustes", style = MaterialTheme.typography.headlineMedium.copy(fontSize = sp(24)))
         Spacer(modifier = Modifier.height(16.dp))
 
         // Selector de Pestañas
@@ -1331,14 +1398,14 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     modifier = Modifier.weight(1f),
                     contentPadding = buttonContentPadding,
                     colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "JUGADORAS") Color.DarkGray else Color.LightGray)
-                ) { Text("Jugadoras", color = if (activeTab == "JUGADORAS") Color.White else Color.Black, fontSize = sp(13)) } // Tamaño reducido
+                ) { Text("Jugadoras", color = if (activeTab == "JUGADORAS") Color.White else Color.Black, fontSize = sp(13)) }
 
                 Button(
                     onClick = { activeTab = "HORARIOS" },
                     modifier = Modifier.weight(1f),
                     contentPadding = buttonContentPadding,
                     colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "HORARIOS") Color.DarkGray else Color.LightGray)
-                ) { Text("Horarios", color = if (activeTab == "HORARIOS") Color.White else Color.Black, fontSize = sp(13)) } // Tamaño reducido
+                ) { Text("Horarios", color = if (activeTab == "HORARIOS") Color.White else Color.Black, fontSize = sp(13)) }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1347,14 +1414,14 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     modifier = Modifier.weight(1f),
                     contentPadding = buttonContentPadding,
                     colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "PARTIDOS") com.example.entrenamientos.ui.theme.InfantilBlue else Color.LightGray)
-                ) { Text("Partidos", color = if (activeTab == "PARTIDOS") Color.White else Color.Black, fontSize = sp(13)) } // Tamaño reducido
+                ) { Text("Partidos", color = if (activeTab == "PARTIDOS") Color.White else Color.Black, fontSize = sp(13)) }
 
                 Button(
                     onClick = { activeTab = "FESTIVOS" },
                     modifier = Modifier.weight(1f),
                     contentPadding = buttonContentPadding,
                     colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "FESTIVOS") Color.Red else Color.LightGray)
-                ) { Text("Festivos", color = if (activeTab == "FESTIVOS") Color.White else Color.Black, fontSize = sp(13)) } // Tamaño reducido
+                ) { Text("Festivos", color = if (activeTab == "FESTIVOS") Color.White else Color.Black, fontSize = sp(13)) }
             }
         }
 
@@ -1367,13 +1434,13 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     onClick = { selectedTeam = 2018 },
                     contentPadding = buttonContentPadding,
                     colors = ButtonDefaults.buttonColors(containerColor = if (selectedTeam == 2018) com.example.entrenamientos.ui.theme.PrebenjaminPink else Color.Gray)
-                ) { Text("Prebenjamines", fontSize = sp(13)) } // Tamaño reducido
+                ) { Text("Prebenjamines", fontSize = sp(13)) }
 
                 Button(
                     onClick = { selectedTeam = 2013 },
                     contentPadding = buttonContentPadding,
                     colors = ButtonDefaults.buttonColors(containerColor = if (selectedTeam == 2013) com.example.entrenamientos.ui.theme.InfantilBlue else Color.Gray)
-                ) { Text("Infantiles", fontSize = sp(13)) } // Tamaño reducido
+                ) { Text("Infantiles", fontSize = sp(13)) }
             }
             Spacer(modifier = Modifier.height(16.dp))
         } else if (activeTab == "PARTIDOS") {
@@ -1392,7 +1459,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     items(players) { player ->
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                             val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
-                            Text(text = displayName, style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15))) // Tamaño reducido
+                            Text(text = displayName, style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)))
                             Row {
                                 IconButton(onClick = { playerToEdit = player; playerNameInput = player.name; playerLastNameInput = player.lastName; showPlayerDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
                                 IconButton(onClick = { viewModel.deletePlayer(player) }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
@@ -1406,15 +1473,15 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = buttonContentPadding,
                     colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                ) { Text("Añadir Nueva Jugadora", color = Color.Black, fontSize = sp(14)) } // Tamaño reducido
+                ) { Text("Añadir Nueva Jugadora", color = Color.Black, fontSize = sp(14)) }
             }
             "HORARIOS" -> {
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     items(teamSchedules) { schedule ->
                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                             Column {
-                                Text(text = daysOfWeek[schedule.dayOfWeek - 1], style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), fontWeight = FontWeight.Bold) // Tamaño reducido
-                                Text(text = "${schedule.startTime} - ${schedule.endTime}", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(13)), color = Color.Gray) // Tamaño reducido
+                                Text(text = daysOfWeek[schedule.dayOfWeek - 1], style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), fontWeight = FontWeight.Bold)
+                                Text(text = "${schedule.startTime} - ${schedule.endTime}", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(13)), color = Color.Gray)
                             }
                             Row {
                                 IconButton(onClick = { scheduleToEdit = schedule; scheduleDayInput = schedule.dayOfWeek; scheduleStartInput = schedule.startTime; scheduleEndInput = schedule.endTime; scheduleError = ""; showScheduleDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
@@ -1429,7 +1496,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = buttonContentPadding,
                     colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                ) { Text("Añadir Horario", color = Color.Black, fontSize = sp(14)) } // Tamaño reducido
+                ) { Text("Añadir Horario", color = Color.Black, fontSize = sp(14)) }
             }
             "PARTIDOS" -> {
                 val matchesByMonth = allMatches.groupBy { java.time.YearMonth.from(java.time.LocalDate.parse(it.date)) }
@@ -1456,7 +1523,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                             ) {
                                 Text(
                                     text = month.format(formatterMonth).uppercase(),
-                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = sp(15)), // Tamaño reducido
+                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = sp(15)),
                                     color = com.example.entrenamientos.ui.theme.InfantilBlue
                                 )
                                 Icon(
@@ -1478,9 +1545,9 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
 
                                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = "$dayOfWeekName $shortDate - ${match.time}", style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), fontWeight = FontWeight.Bold) // Tamaño reducido
-                                        Text(text = "Polideportivo ${match.location}", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(13))) // Tamaño reducido
-                                        Text(text = if (match.isLocal) "CD Huerto - ${match.opponent}" else "${match.opponent} - CD Huerto", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(13))) // Tamaño reducido
+                                        Text(text = "$dayOfWeekName $shortDate - ${match.time}", style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), fontWeight = FontWeight.Bold)
+                                        Text(text = "Polideportivo ${match.location}", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(13)))
+                                        Text(text = if (match.isLocal) "CD Huerto - ${match.opponent}" else "${match.opponent} - CD Huerto", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(13)))
                                     }
                                     Row {
                                         IconButton(onClick = { matchToEdit = match; matchStep = 1; val parts = match.date.split("-"); matchDateInput = "${parts[2]}-${parts[1]}-${parts[0]}"; matchTimeInput = match.time; matchIsLocalInput = match.isLocal; matchLocationInput = match.location; matchOpponentInput = match.opponent; showMatchDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
@@ -1497,7 +1564,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = buttonContentPadding,
                     colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                ) { Text("Añadir Partido", color = Color.Black, fontSize = sp(14)) } // Tamaño reducido
+                ) { Text("Añadir Partido", color = Color.Black, fontSize = sp(14)) }
             }
             "FESTIVOS" -> {
                 FestivosSettingsTab(viewModel)
@@ -1740,12 +1807,11 @@ fun FestivosSettingsTab(viewModel: BasketViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    // Límite de escalado reducido para mantener tamaños contenidos
     val scale = (configuration.screenWidthDp / 360f).coerceIn(0.85f, 1.25f)
     fun sp(base: Int) = (base * scale).sp
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Añadir Día Festivo", style = MaterialTheme.typography.titleMedium.copy(fontSize = sp(16))) // Tamaño reducido
+        Text("Añadir Día Festivo", style = MaterialTheme.typography.titleMedium.copy(fontSize = sp(16)))
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1772,7 +1838,7 @@ fun FestivosSettingsTab(viewModel: BasketViewModel) {
                 Text(
                     text = newHolidayDate.ifEmpty { "Seleccionar fecha" },
                     color = if (newHolidayDate.isEmpty()) Color.Gray else Color.Black,
-                    fontSize = sp(13) // Tamaño reducido
+                    fontSize = sp(13)
                 )
             }
 
@@ -1793,12 +1859,12 @@ fun FestivosSettingsTab(viewModel: BasketViewModel) {
                 ),
                 enabled = newHolidayDate.isNotEmpty()
             ) {
-                Text("Añadir", color = if (newHolidayDate.isNotEmpty()) Color.White else Color.DarkGray, fontSize = sp(13)) // Tamaño reducido
+                Text("Añadir", color = if (newHolidayDate.isNotEmpty()) Color.White else Color.DarkGray, fontSize = sp(13))
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
-        Text("Festivos Registrados", style = MaterialTheme.typography.titleMedium.copy(fontSize = sp(16))) // Tamaño reducido
+        Text("Festivos Registrados", style = MaterialTheme.typography.titleMedium.copy(fontSize = sp(16)))
         Spacer(modifier = Modifier.height(8.dp))
 
         LazyColumn {
@@ -1815,7 +1881,7 @@ fun FestivosSettingsTab(viewModel: BasketViewModel) {
                     val hDate = java.time.LocalDate.parse(holiday.date)
                     val formatted = "${hDate.dayOfMonth} de ${hDate.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))} ${hDate.year}"
 
-                    Text(formatted, style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), color = Color.Red, fontWeight = FontWeight.Bold) // Tamaño reducido
+                    Text(formatted, style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), color = Color.Red, fontWeight = FontWeight.Bold)
 
                     IconButton(onClick = { viewModel.removeHoliday(holiday) }) {
                         Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
