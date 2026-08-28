@@ -1771,16 +1771,38 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // --- MODIFICACIÓN DE LA FILA DE 3 BOTONES ---
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) { // Espaciado reducido a 4.dp
 
                         if (matchStep > 1) {
-                            Button(onClick = { matchStep-- }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) { Text("Atrás", color = Color.White) }
+                            Button(
+                                onClick = { matchStep-- },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp), // Padding interno reducido
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                            ) {
+                                Text("Atrás", color = Color.White, fontSize = sp(13), maxLines = 1) // Fuente responsiva y maxLines
+                            }
                         }
 
-                        Button(onClick = { showMatchDialog = false }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)) { Text("Cancelar", color = Color.White) }
+                        Button(
+                            onClick = { showMatchDialog = false },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                        ) {
+                            Text("Cancelar", color = Color.White, fontSize = sp(13), maxLines = 1)
+                        }
 
                         if (matchStep < 4) {
-                            Button(onClick = { matchStep++ }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue)) { Text("Siguiente", color = Color.White) }
+                            Button(
+                                onClick = { matchStep++ },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.InfantilBlue)
+                            ) {
+                                Text("Siguiente", color = Color.White, fontSize = sp(13), maxLines = 1)
+                            }
                         } else {
                             Button(
                                 onClick = {
@@ -1790,8 +1812,11 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                                     viewModel.addOrUpdateMatch(newMatch); showMatchDialog = false
                                 },
                                 modifier = Modifier.weight(1f),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                            ) { Text("Guardar", color = Color.Black) }
+                            ) {
+                                Text("Guardar", color = Color.Black, fontSize = sp(13), maxLines = 1)
+                            }
                         }
                     }
                 }
