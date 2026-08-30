@@ -40,4 +40,8 @@ class AppRepository @Inject constructor(
     fun getAllHolidays(): Flow<List<Holiday>> = dao.getAllHolidays()
     suspend fun insertHoliday(holiday: Holiday) = dao.insertHoliday(holiday)
     suspend fun deleteHoliday(holiday: Holiday) = dao.deleteHoliday(holiday)
+
+    fun getAllTeams() = dao.getAllTeams()
+    suspend fun insertTeam(team: Team) = dao.insertTeam(team)
+    suspend fun deleteTeam(team: Team) = dao.deleteTeam(team)
 }

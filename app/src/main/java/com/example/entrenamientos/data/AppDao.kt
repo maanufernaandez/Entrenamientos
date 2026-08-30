@@ -73,4 +73,13 @@ interface AppDao {
 
     @Delete
     suspend fun deleteHoliday(holiday: Holiday)
+
+    @Query("SELECT * FROM teams")
+    fun getAllTeams(): kotlinx.coroutines.flow.Flow<List<Team>>
+
+    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    suspend fun insertTeam(team: Team)
+
+    @Delete
+    suspend fun deleteTeam(team: Team)
 }

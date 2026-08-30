@@ -5,8 +5,8 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [Player::class, Attendance::class, TrainingNote::class, Match::class, TrainingSchedule::class, Holiday::class],
-    version = 5,
+    entities = [Player::class, TrainingSchedule::class, Match::class, Attendance::class, Holiday::class, TrainingNote::class, Team::class],
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
