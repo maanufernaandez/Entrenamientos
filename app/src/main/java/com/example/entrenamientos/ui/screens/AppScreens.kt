@@ -1786,7 +1786,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     onClick = { showTeamWizard = true },
                     colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
                 ) {
-                    Text("Añadir un Equipo para Empezar", fontSize = sp(16), color = Color.Black)
+                    Text("Crear un nuevo equipo", fontSize = sp(16), color = Color.Black)
                 }
             }
         } else {
@@ -1921,7 +1921,39 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     ) { Text("Añadir Nueva Jugadora", color = Color.Black, fontSize = sp(14)) }
                 }
                 "HORARIOS" -> {
+                    var firstTrainingDateInput by remember(selectedTeam) {
+                        mutableStateOf(teamsList.find { it.year == selectedTeam }?.firstTrainingDate ?: "2026-09-01")
+                    }
+
                     LazyColumn(modifier = Modifier.weight(1f)) {
+                        item {
+                            Text("Fecha del primer entrenamiento:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = {
+                                    val parts = firstTrainingDateInput.split("-")
+                                    val y = parts.getOrNull(0)?.toIntOrNull() ?: 2026
+                                    val m = (parts.getOrNull(1)?.toIntOrNull() ?: 9) - 1
+                                    val d = parts.getOrNull(2)?.toIntOrNull() ?: 1
+                                    android.app.DatePickerDialog(context, { _, year, month, day ->
+                                        val newDate = String.format(java.util.Locale.getDefault(), "%04d-%02d-%02d", year, month + 1, day)
+                                        firstTrainingDateInput = newDate
+                                        viewModel.updateTeamFirstTrainingDate(selectedTeam, newDate)
+                                    }, y, m, d).show()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                val parsedDate = try { java.time.LocalDate.parse(firstTrainingDateInput) } catch (_: Exception) { java.time.LocalDate.of(2026, 9, 1) }
+                                val formatted = "${parsedDate.dayOfMonth} de ${parsedDate.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))} ${parsedDate.year}"
+                                Text("📅 $formatted", color = Color.Black)
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HorizontalDivider()
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Horarios Semanales:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         items(teamSchedules) { schedule ->
                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                 Column {

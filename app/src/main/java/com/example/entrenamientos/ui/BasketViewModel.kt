@@ -223,7 +223,22 @@ class BasketViewModel @Inject constructor(
     fun getTeamsForDate(date: java.time.LocalDate): List<Int> {
         if (isHoliday(date)) return emptyList()
         val dayValue = date.dayOfWeek.value
-        return _schedules.value.filter { it.dayOfWeek == dayValue }.map { it.teamYear }.distinct()
+        return _schedules.value.filter { schedule ->
+            if (schedule.dayOfWeek != dayValue) return@filter false
+            val team = _teams.value.find { it.year == schedule.teamYear }
+            val firstDateStr = team?.firstTrainingDate ?: "2026-09-01"
+            val firstDate = try { java.time.LocalDate.parse(firstDateStr) } catch (_: Exception) { java.time.LocalDate.of(2026, 9, 1) }
+            !date.isBefore(firstDate)
+        }.map { it.teamYear }.distinct()
+    }
+
+    fun updateTeamFirstTrainingDate(teamId: Int, newDate: String) {
+        viewModelScope.launch {
+            val team = _teams.value.find { it.year == teamId }
+            if (team != null) {
+                repository.insertTeam(team.copy(firstTrainingDate = newDate))
+            }
+        }
     }
 
     fun deleteSchedule(schedule: TrainingSchedule) {
