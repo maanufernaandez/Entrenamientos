@@ -1,7 +1,9 @@
 package com.example.entrenamientos.ui.screens
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -2059,7 +2061,6 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
         var eName by remember { mutableStateOf(teamToEdit!!.name) }
         var eCategory by remember { mutableStateOf(teamToEdit!!.categoryYear) }
         var eColor by remember { mutableStateOf(teamToEdit!!.colorHex) }
-        val simpleColors = listOf("#F44336", "#E91E63", "#9C27B0", "#673AB7", "#3F51B5", "#2196F3", "#03A9F4", "#00BCD4", "#009688", "#4CAF50", "#8BC34A", "#CDDC39", "#FFC107", "#FF9800", "#FF5722", "#795548", "#9E9E9E", "#607D8B")
 
         AlertDialog(
             onDismissRequest = { teamToEdit = null },
@@ -2072,28 +2073,8 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(value = eCategory, onValueChange = { if(it.all{c->c.isDigit()}) eCategory = it }, label = { Text("Año (opcional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
                     Spacer(Modifier.height(16.dp))
-                    Text("Color del equipo:")
-                    Spacer(Modifier.height(8.dp))
-                    LazyColumn(modifier = Modifier.height(150.dp)) {
-                        items(simpleColors.chunked(6)) { rowColors ->
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                rowColors.forEach { colorHex ->
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(android.graphics.Color.parseColor(colorHex)))
-                                            .clickable { eColor = colorHex },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (eColor == colorHex) {
-                                            Icon(Icons.Default.Check, contentDescription = "Seleccionado", tint = Color.White, modifier = Modifier.size(20.dp))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+
+                    FullColorPicker(colorHex = eColor, onColorChanged = { eColor = it })
                 }
             },
             confirmButton = {},
@@ -2289,13 +2270,106 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
 }
 
 @Composable
+fun FullColorPicker(
+    colorHex: String,
+    onColorChanged: (String) -> Unit
+) {
+    val initialColorInt = try { android.graphics.Color.parseColor(colorHex) } catch (e: Exception) { android.graphics.Color.parseColor("#2196F3") }
+    val hsl = FloatArray(3)
+    androidx.core.graphics.ColorUtils.colorToHSL(initialColorInt, hsl)
+
+    var hue by remember { mutableFloatStateOf(hsl[0]) }
+    var lightness by remember { mutableFloatStateOf(hsl[2]) }
+
+    // Usamos el HSL de Android directamente para evitar grises por conversiones de Compose
+    val argb = androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(hue, 1f, lightness))
+    val currentColor = Color(argb)
+    val pureArgb = androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(hue, 1f, 0.5f))
+    val pureColor = Color(pureArgb)
+
+    val hex = String.format("#%06X", 0xFFFFFF and argb)
+
+    androidx.compose.runtime.LaunchedEffect(hex) {
+        if (hex != colorHex) {
+            onColorChanged(hex)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .clip(MaterialTheme.shapes.small)
+                .background(currentColor)
+                .border(1.dp, Color.Black, MaterialTheme.shapes.small)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text("Color", style = MaterialTheme.typography.labelSmall)
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp) // Alinea el degradado exactamente con los topes del deslizador
+                    .height(12.dp)
+                    .clip(CircleShape)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
+                        )
+                    )
+            )
+            Slider(
+                value = hue,
+                onValueChange = { hue = it },
+                valueRange = 0f..360f,
+                colors = SliderDefaults.colors(
+                    activeTrackColor = Color.Transparent,
+                    inactiveTrackColor = Color.Transparent,
+                    thumbColor = Color.DarkGray
+                )
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text("Luminosidad", style = MaterialTheme.typography.labelSmall)
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp) // Alinea el degradado exactamente con los topes del deslizador
+                    .height(12.dp)
+                    .clip(CircleShape)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(Color.Black, pureColor, Color.White)
+                        )
+                    )
+                    .border(0.5.dp, Color.Gray, CircleShape)
+            )
+            Slider(
+                value = lightness,
+                onValueChange = { lightness = it },
+                valueRange = 0f..1f,
+                colors = SliderDefaults.colors(
+                    activeTrackColor = Color.Transparent,
+                    inactiveTrackColor = Color.Transparent,
+                    thumbColor = Color.Gray // Gris para que siempre sea visible en los extremos
+                )
+            )
+        }
+    }
+}
+
+@Composable
 fun AddTeamWizard(viewModel: BasketViewModel, onDismiss: () -> Unit) {
     var step by remember { mutableIntStateOf(1) }
 
     var teamName by remember { mutableStateOf("") }
     var teamCategoryStr by remember { mutableStateOf("") }
     var selectedColorHex by remember { mutableStateOf("#2196F3") }
-    val simpleColors = listOf("#F44336", "#E91E63", "#9C27B0", "#673AB7", "#3F51B5", "#2196F3", "#03A9F4", "#00BCD4", "#009688", "#4CAF50", "#8BC34A", "#CDDC39", "#FFC107", "#FF9800", "#FF5722", "#795548", "#9E9E9E", "#607D8B")
 
     var tempSchedules by remember { mutableStateOf(listOf<com.example.entrenamientos.data.TrainingSchedule>()) }
     val daysOfWeek = listOf("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
@@ -2328,28 +2402,8 @@ fun AddTeamWizard(viewModel: BasketViewModel, onDismiss: () -> Unit) {
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(value = teamCategoryStr, onValueChange = { if (it.all { char -> char.isDigit() }) teamCategoryStr = it }, label = { Text("Año de categoría (opcional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("Color del equipo:")
-                        Spacer(Modifier.height(8.dp))
-                        LazyColumn(modifier = Modifier.height(150.dp)) {
-                            items(simpleColors.chunked(6)) { rowColors ->
-                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                    rowColors.forEach { colorHex ->
-                                        Box(
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(android.graphics.Color.parseColor(colorHex)))
-                                                .clickable { selectedColorHex = colorHex },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (selectedColorHex == colorHex) {
-                                                Icon(Icons.Default.Check, contentDescription = "Seleccionado", tint = Color.White, modifier = Modifier.size(20.dp))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+
+                        FullColorPicker(colorHex = selectedColorHex, onColorChanged = { selectedColorHex = it })
                     }
                     2 -> {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -2386,7 +2440,8 @@ fun AddTeamWizard(viewModel: BasketViewModel, onDismiss: () -> Unit) {
                         }, modifier = Modifier.fillMaxWidth(), enabled = availableDays.isNotEmpty()) { Text("Añadir Entrenamiento") }
 
                         Spacer(modifier = Modifier.height(8.dp))
-                        LazyColumn(modifier = Modifier.height(100.dp)) {
+                        // Modificador que hace que crezca progresivamente y quita el hueco vacío
+                        LazyColumn(modifier = Modifier.wrapContentHeight().heightIn(max = 150.dp)) {
                             items(tempSchedules) { s ->
                                 Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("${daysOfWeek[s.dayOfWeek - 1]} ${s.startTime}-${s.endTime}")
@@ -2408,7 +2463,7 @@ fun AddTeamWizard(viewModel: BasketViewModel, onDismiss: () -> Unit) {
                             }
                         }, modifier = Modifier.fillMaxWidth()) { Text("Añadir Jugadora") }
                         Spacer(modifier = Modifier.height(8.dp))
-                        LazyColumn(modifier = Modifier.height(150.dp)) {
+                        LazyColumn(modifier = Modifier.wrapContentHeight().heightIn(max = 150.dp)) {
                             items(tempPlayers) { p ->
                                 Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("${p.name} ${p.lastName}")
