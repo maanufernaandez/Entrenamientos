@@ -1,7 +1,6 @@
 package com.example.entrenamientos.ui.screens
 
 import android.annotation.SuppressLint
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -51,6 +53,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -75,8 +78,19 @@ fun CalendarScreen(
     val minMonth = java.time.YearMonth.of(2026, 9)
     val maxMonth = java.time.YearMonth.of(2027, 5)
 
-    var showDayDialog by remember { mutableStateOf(false) }
-    var clickedDate by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    // Restaurar popup si volvemos a la pantalla
+    val restoredDateStr = navController.currentBackStackEntry?.savedStateHandle?.get<String>("restore_popup_date")
+    var showDayDialog by remember { mutableStateOf(restoredDateStr != null) }
+    var clickedDate by remember {
+        mutableStateOf<java.time.LocalDate?>(
+            if (restoredDateStr != null) java.time.LocalDate.parse(restoredDateStr) else null
+        )
+    }
+
+    // Limpiar argumento
+    if (restoredDateStr != null) {
+        navController.currentBackStackEntry?.savedStateHandle?.remove<String>("restore_popup_date")
+    }
 
     val schedules by viewModel.schedules.collectAsState()
 
@@ -199,7 +213,6 @@ fun DayCell(
                 java.time.LocalDate.of(2026, 9, 1)
             }
 
-            // Solo incluimos el horario si la fecha actual NO es anterior a su primer entrenamiento
             !date.isBefore(firstDate)
         }.sortedBy { it.startTime }
     }
@@ -210,7 +223,6 @@ fun DayCell(
         modifier = Modifier
             .fillMaxSize()
             .background(cellBackgroundColor)
-            // Aquí desactivamos el clic si el día no tiene entrenamientos ni partidos
             .clickable(enabled = daySchedules.isNotEmpty() || matchesOnDay.isNotEmpty()) { onClick() }
             .padding(4.dp)
     ) {
@@ -227,7 +239,6 @@ fun DayCell(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Círculos de partidos apilados verticalmente y centrados
             if (matchesOnDay.isNotEmpty()) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -253,7 +264,6 @@ fun DayCell(
                 }
             }
 
-            // Entrenamientos ordenados cronológicamente
             daySchedules.forEachIndexed { index, schedule ->
                 val team = teamsList.find { it.year == schedule.teamYear }
                 val bgColor = team?.colorHex?.let {
@@ -294,8 +304,20 @@ fun DayOptionsDialog(
     val dayNumber = date.dayOfMonth
     val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
 
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val scale = (configuration.screenWidthDp / 360f).coerceIn(0.85f, 1.25f)
+
+    val uniformSpace = (16 * scale).dp
+    val btnInternalSpace = (8 * scale).dp
+    val btnHeight = (48 * scale).dp
+    val backBtnHeight = (36 * scale).dp // Altura más estrecha para el botón Volver
+    val fontSizeTitle = (16 * scale).sp
+    val fontSizeTeam = (16 * scale).sp
+    val fontSizeBtn = (14 * scale).sp
+    val iconSize = (20 * scale).dp
+
     androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { },
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Card(
@@ -303,61 +325,75 @@ fun DayOptionsDialog(
             shape = MaterialTheme.shapes.medium
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(uniformSpace),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (hasMatch && match != null) {
-                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(6.dp * scale)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.Black)
-                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(iconSize), tint = Color.Black)
+                            Spacer(Modifier.width(8.dp * scale))
                             Text(
                                 text = "$dayOfWeek $dayNumber/$monthNumber - ${match.time}",
                                 style = MaterialTheme.typography.titleMedium,
+                                fontSize = fontSizeTitle,
                                 color = Color.Black,
                                 fontWeight = FontWeight.Normal
                             )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Sports, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.Black)
-                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Default.Sports, contentDescription = null, modifier = Modifier.size(iconSize), tint = Color.Black)
+                            Spacer(Modifier.width(8.dp * scale))
                             Text(
                                 text = if (match.isLocal) "CD Huerto - ${match.opponent}" else "${match.opponent} - CD Huerto",
                                 style = MaterialTheme.typography.titleMedium,
+                                fontSize = fontSizeTitle,
                                 color = Color.Black,
                                 fontWeight = FontWeight.Normal
                             )
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.Black)
-                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(iconSize), tint = Color.Black)
+                            Spacer(Modifier.width(8.dp * scale))
                             Text(
                                 text = "Polideportivo ${match.location}",
                                 style = MaterialTheme.typography.titleMedium,
+                                fontSize = fontSizeTitle,
                                 color = Color.Black,
                                 fontWeight = FontWeight.Normal
                             )
                         }
                     }
                 } else {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.Black)
-                        Spacer(Modifier.width(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(iconSize), tint = Color.Black)
+                        Spacer(Modifier.width(8.dp * scale))
                         Text(
                             text = "$dayOfWeek $dayNumber de $monthName",
                             style = MaterialTheme.typography.titleMedium,
+                            fontSize = fontSizeTitle,
                             color = Color.Black,
                             fontWeight = FontWeight.Normal
                         )
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                if (teams.isNotEmpty() || hasMatch) {
+                    Spacer(Modifier.height(uniformSpace))
+                    HorizontalDivider(color = Color.Black, thickness = 1.dp)
+                    Spacer(Modifier.height(uniformSpace))
+                }
 
                 if (teams.isNotEmpty()) {
                     teams.forEachIndexed { index, teamYearLoop ->
                         if (index > 0) {
-                            HorizontalDivider(color = Color.Black, thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
+                            Spacer(Modifier.height(uniformSpace))
+                            HorizontalDivider(color = Color.Black, thickness = 1.dp)
+                            Spacer(Modifier.height(uniformSpace))
                         }
 
                         val team = teamsList.find { it.year == teamYearLoop }
@@ -369,175 +405,222 @@ fun DayOptionsDialog(
                             try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
                         } ?: Color.Gray
 
-                        Text(teamDisplayName, style = MaterialTheme.typography.bodyLarge, color = teamColor, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = teamDisplayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = fontSizeTeam,
+                            color = teamColor,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(Modifier.height(uniformSpace))
 
                         val attendanceForTeam by viewModel.getAttendanceForDateAndTeam(date.toString(), teamYearLoop).collectAsState(initial = emptyList())
                         val attendanceLabel = if (attendanceForTeam.isNotEmpty()) "Ver Asistencia" else "Asistencia"
 
-                        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { viewModel.setSelectedTeamYear(teamYearLoop); onDismiss(); navController.navigate("notes/ENTRENAMIENTO") }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = teamColor)) { Text("Entrenamiento", color = Color.White, maxLines = 1, fontSize = 13.sp) }
-                            Button(onClick = { viewModel.setSelectedTeamYear(teamYearLoop); onDismiss(); navController.navigate("attendance") }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = teamColor)) { Text(attendanceLabel, color = Color.White, maxLines = 1, fontSize = 13.sp) }
-                        }
+                        val trainingBtnModifier = Modifier.fillMaxWidth().height(btnHeight)
 
-                        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Spacer(modifier = Modifier.weight(0.5f))
-                            Button(onClick = { viewModel.setSelectedTeamYear(teamYearLoop); onDismiss(); navController.navigate("notes/OTROS") }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = teamColor)) { Text("Notas", color = Color.White, maxLines = 1, fontSize = 13.sp) }
-                            Spacer(modifier = Modifier.weight(0.5f))
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(btnInternalSpace)) {
+                            Button(
+                                onClick = { viewModel.setSelectedTeamYear(teamYearLoop); onDismiss(); navController.navigate("notes/ENTRENAMIENTO") },
+                                modifier = trainingBtnModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = teamColor)
+                            ) { Text("Entrenamiento", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
+
+                            Button(
+                                onClick = { viewModel.setSelectedTeamYear(teamYearLoop); onDismiss(); navController.navigate("attendance") },
+                                modifier = trainingBtnModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = teamColor)
+                            ) { Text(attendanceLabel, color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
+
+                            Button(
+                                onClick = { viewModel.setSelectedTeamYear(teamYearLoop); onDismiss(); navController.navigate("notes/OTROS") },
+                                modifier = trainingBtnModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = teamColor)
+                            ) { Text("Notas", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
                         }
                     }
                 }
 
                 if (hasMatch && match != null) {
-                    HorizontalDivider(color = Color.Black, thickness = 1.dp, modifier = Modifier.padding(vertical = 12.dp))
+                    if (teams.isNotEmpty()) {
+                        Spacer(Modifier.height(uniformSpace))
+                        HorizontalDivider(color = Color.Black, thickness = 1.dp)
+                        Spacer(Modifier.height(uniformSpace))
+                    }
+
                     viewModel.setSelectedTeamYear(match.teamYear)
 
-                    // Extraemos el color del equipo del partido
                     val matchTeam = teamsList.find { it.year == match.teamYear }
+                    val matchTeamNameBase = matchTeam?.name ?: "Equipo ${match.teamYear}"
+                    val matchCatYear = matchTeam?.categoryYear
+                    val matchTeamDisplayName = if (!matchCatYear.isNullOrBlank()) "$matchTeamNameBase ($matchCatYear)" else matchTeamNameBase
+
                     val matchTeamColor = matchTeam?.colorHex?.let {
                         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.DarkGray }
                     } ?: Color.DarkGray
 
+                    Text(
+                        text = matchTeamDisplayName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontSize = fontSizeTeam,
+                        color = matchTeamColor,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(Modifier.height(uniformSpace))
+
                     val (canMake, _) = viewModel.canMakeConvocatoria(date)
                     val isConvocatoriaEnabled = canMake || match.isConvocatoriaSaved
 
-                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { viewModel.setSelectedDate(date.toString()); onDismiss(); navController.navigate("convocatoria") },
-                                enabled = isConvocatoriaEnabled,
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
-                            ) { Text(if (match.isConvocatoriaSaved) "Ver Convocatoria" else "Convocatoria", color = Color.White, maxLines = 1, fontSize = 12.sp) }
+                    val matchButtonModifier = Modifier.fillMaxWidth().height(btnHeight)
 
-                            Button(
-                                onClick = { viewModel.setSelectedDate(date.toString()); onDismiss(); navController.navigate("quintetos") },
-                                enabled = match.isConvocatoriaSaved,
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
-                            ) { Text("Quintetos", color = Color.White, maxLines = 1, fontSize = 13.sp) }
-                        }
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(btnInternalSpace)) {
+                        Button(
+                            onClick = { viewModel.setSelectedDate(date.toString()); onDismiss(); navController.navigate("convocatoria") },
+                            enabled = isConvocatoriaEnabled,
+                            modifier = matchButtonModifier,
+                            colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
+                        ) { Text(if (match.isConvocatoriaSaved) "Ver Convocatoria" else "Convocatoria", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
 
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Spacer(modifier = Modifier.weight(0.5f))
-                            Button(
-                                onClick = { viewModel.setSelectedDate(date.toString()); onDismiss(); navController.navigate("resultado") },
-                                enabled = match.isConvocatoriaSaved,
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
-                            ) { Text(if (match.resultLocal != null) "Ver Resultado" else "Resultado", color = Color.White, maxLines = 1, fontSize = 13.sp) }
-                            Spacer(modifier = Modifier.weight(0.5f))
-                        }
+                        Button(
+                            onClick = { viewModel.setSelectedDate(date.toString()); onDismiss(); navController.navigate("quintetos") },
+                            enabled = match.isConvocatoriaSaved,
+                            modifier = matchButtonModifier,
+                            colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
+                        ) { Text("Quintetos", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
+
+                        Button(
+                            onClick = { viewModel.setSelectedDate(date.toString()); onDismiss(); navController.navigate("resultado") },
+                            enabled = match.isConvocatoriaSaved,
+                            modifier = matchButtonModifier,
+                            colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
+                        ) { Text(if (match.resultLocal != null) "Ver Resultado" else "Resultado", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
                     }
+                }
+
+                // --- BOTÓN VOLVER INFERIOR (MÁS ESTRECHO) ---
+                Spacer(Modifier.height(uniformSpace))
+                HorizontalDivider(color = Color.Black, thickness = 1.dp)
+                Spacer(Modifier.height(uniformSpace))
+
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().height(backBtnHeight),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                ) {
+                    Text("Volver", color = Color.White, maxLines = 1, fontSize = fontSizeBtn)
                 }
             }
         }
     }
 }
 
+fun goBackToDialog(navController: NavController, dateStr: String) {
+    navController.previousBackStackEntry?.savedStateHandle?.set("restore_popup_date", dateStr)
+    navController.popBackStack()
+}
+
 @Composable
-fun AttendanceScreen(viewModel: BasketViewModel = hiltViewModel(), navController: NavController) {
-    val dateStr by viewModel.selectedDate.collectAsState()
+fun AttendanceScreen(viewModel: BasketViewModel, navController: NavController) {
+    val date by viewModel.selectedDate.collectAsState()
     val teamYear by viewModel.selectedTeamYear.collectAsState()
-    val teamsList by viewModel.teams.collectAsState()
-
     val players by viewModel.getPlayersForTeam(teamYear).collectAsState(initial = emptyList())
-    val existingAttendance by viewModel.getAttendanceForDateAndTeam(dateStr, teamYear).collectAsState(initial = emptyList())
+    val currentAttendances by viewModel.getAttendanceForDateAndTeam(date, teamYear).collectAsState(initial = emptyList())
 
-    val attendanceState = remember(players, existingAttendance) {
-        androidx.compose.runtime.mutableStateMapOf<Long, Int>().apply {
-            players.forEach { player ->
-                val existing = existingAttendance.find { it.playerId == player.id }
-                put(player.id, existing?.status ?: 0)
-            }
+    val attendanceMap = remember(currentAttendances) {
+        mutableStateMapOf<Long, Int>().apply {
+            currentAttendances.forEach { put(it.playerId, it.status) }
         }
     }
 
-    val team = teamsList.find { it.year == teamYear }
-    val teamName = team?.name ?: "$teamYear"
+    val playerSortComparator = compareBy<com.example.entrenamientos.data.Player> { it.dorsal.isNullOrBlank() }
+        .thenBy { it.dorsal?.toIntOrNull() ?: 999 }
 
-    val date = java.time.LocalDate.parse(dateStr)
-    val dayOfWeek = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
-    val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
+    val sortedPlayers = players.sortedWith(playerSortComparator)
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    val dateObj = java.time.LocalDate.parse(date)
+    val dayOfWeek = dateObj.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+    val formattedDateStr = String.format(java.util.Locale.getDefault(), "%02d/%02d", dateObj.dayOfMonth, dateObj.monthValue)
+
+    // Manejar retroceso físico nativo
+    androidx.activity.compose.BackHandler {
+        goBackToDialog(navController, date)
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(text = "Asistencia $teamName:", style = MaterialTheme.typography.headlineMedium)
-        Text(text = "$dayOfWeek ${date.dayOfMonth} de $monthName", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+        Text("Asistencia - $dayOfWeek $formattedDateStr", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(players) { player ->
-                val status = attendanceState[player.id] ?: 0
-
-                val bgColor = when (status) {
+        LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth()) {
+            items(sortedPlayers) { player ->
+                val status = attendanceMap[player.id] ?: 0
+                val containerColor = when (status) {
                     0 -> com.example.entrenamientos.ui.theme.AttendanceGreen
                     1 -> com.example.entrenamientos.ui.theme.AttendanceYellow
-                    2 -> com.example.entrenamientos.ui.theme.AttendanceRed
-                    else -> com.example.entrenamientos.ui.theme.AttendanceGreen
-                }
-
-                val statusText = when (status) {
-                    0 -> "Asiste"
-                    1 -> "Justificado"
-                    2 -> "Injustificado"
-                    else -> "Asiste"
+                    else -> com.example.entrenamientos.ui.theme.AttendanceRed
                 }
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(bgColor)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(containerColor)
                         .clickable {
-                            attendanceState[player.id] = viewModel.getNextAttendanceStatus(status)
+                            attendanceMap[player.id] = viewModel.getNextAttendanceStatus(status)
                         }
                         .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
-                    Text(
-                        text = displayName,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontSize = 17.sp,
-                        color = Color.Black
-                    )
+                    val baseName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
 
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black.copy(alpha = 0.7f)
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = baseName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                    }
+
+                    val statusText = when (status) {
+                        0 -> "Asiste"
+                        1 -> "Justificada"
+                        else -> "Injustificada"
+                    }
+                    Text(statusText, fontWeight = FontWeight.Normal, color = Color.Black)
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { navController.popBackStack() },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                onClick = { goBackToDialog(navController, date) },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                modifier = Modifier.weight(1f)
             ) { Text("Cancelar", color = Color.White) }
 
             Button(
                 onClick = {
-                    val newAttendances = players.map { player ->
+                    val newAttendances = sortedPlayers.map { player ->
                         com.example.entrenamientos.data.Attendance(
-                            id = existingAttendance.find { it.playerId == player.id }?.id ?: 0,
-                            date = dateStr,
+                            id = currentAttendances.find { it.playerId == player.id }?.id ?: 0,
+                            date = date,
                             playerId = player.id,
-                            status = attendanceState[player.id] ?: 0,
-                            teamYear = teamYear
+                            teamYear = teamYear,
+                            status = attendanceMap[player.id] ?: 0
                         )
                     }
                     viewModel.saveAttendances(newAttendances)
-                    navController.popBackStack()
+                    goBackToDialog(navController, date)
                 },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen),
+                modifier = Modifier.weight(1f)
             ) { Text("Guardar", color = Color.Black) }
         }
     }
@@ -595,27 +678,31 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
 
     androidx.activity.compose.BackHandler {
         shouldSaveDraft = false
-        navController.popBackStack()
+        goBackToDialog(navController, selectedDateStr)
     }
 
     var playerToUnsummon by remember { mutableStateOf<com.example.entrenamientos.data.Player?>(null) }
     val reasonOptions = listOf("Rotación", "Lesión", "Falta a entrenamientos", "Castigada", "No puede ir")
 
-    val teamsList by viewModel.teams.collectAsState()
-    val activeColor = teamsList.find { it.year == match.teamYear }?.colorHex?.let {
-        try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
-    } ?: Color.Black
+    val playerSortComparator = compareBy<com.example.entrenamientos.data.Player> { it.dorsal.isNullOrBlank() }
+        .thenBy { it.dorsal?.toIntOrNull() ?: 999 }
+
+    val sortedPlayers = players.sortedWith(playerSortComparator)
+
+    val dayOfWeek = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+    val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+    val matchDateFormatted = "$dayOfWeek ${date.dayOfMonth} de $monthName"
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(if (isEditMode) {
             if (match.isConvocatoriaSaved) "Editar Convocatoria" else "Crear Convocatoria"
         } else "Convocatoria Oficial", style = MaterialTheme.typography.headlineMedium)
-        Text("vs ${match.opponent} - ${match.date}", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+        Text("vs ${match.opponent} - $matchDateFormatted", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
 
         if (!isEditMode) {
-            val convocadas = players.filter { match.summonedPlayers.contains(it.id) }
-            val desconvocadas = players.filter { !match.summonedPlayers.contains(it.id) }
+            val convocadas = sortedPlayers.filter { match.summonedPlayers.contains(it.id) }
+            val desconvocadas = sortedPlayers.filter { !match.summonedPlayers.contains(it.id) }
 
             LazyColumn(modifier = Modifier.weight(1f)) {
                 item {
@@ -623,13 +710,31 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 items(convocadas) { p ->
-                    val displayName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
-                    Text(
-                        text = "• $displayName",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontSize = 17.sp,
-                        modifier = Modifier.padding(start = 16.dp, bottom = 4.dp)
-                    )
+                    val dDisplay = p.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
+                    val baseName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
+
+                    Row(
+                        modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = dDisplay,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = 17.sp,
+                            modifier = Modifier.width(36.dp),
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = " · ",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = 17.sp
+                        )
+                        Text(
+                            text = baseName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = 17.sp
+                        )
+                    }
                 }
 
                 item {
@@ -638,16 +743,21 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 items(desconvocadas) { p ->
-                    Column(modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)) {
-                        val displayName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
+                    val baseName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, bottom = 8.dp, end = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = "• $displayName",
+                            text = "• $baseName",
                             style = MaterialTheme.typography.bodyLarge,
                             fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Normal
                         )
                         Text(
-                            text = "Motivo: ${match.unsummonedReasons[p.id]?.takeIf { it.isNotBlank() } ?: "Sin motivo especificado"}",
+                            text = match.unsummonedReasons[p.id]?.takeIf { it.isNotBlank() } ?: "Sin motivo",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.DarkGray
                         )
@@ -656,36 +766,35 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Button(
-                    onClick = {
-                        shouldSaveDraft = false
-                        navController.popBackStack()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                    modifier = Modifier.weight(1f)
-                ) { Text("Volver", color = Color.White) }
 
-                Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            shouldSaveDraft = false
+                            goBackToDialog(navController, selectedDateStr)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Volver", color = Color.White) }
+
+                    Button(
+                        onClick = { isEditMode = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Editar", color = Color.Black) }
+                }
 
                 Button(
                     onClick = {
                         shouldSaveDraft = false
                         val resetMatch = match.copy(isConvocatoriaSaved = false, summonedPlayers = emptyList(), unsummonedReasons = emptyMap())
                         viewModel.addOrUpdateMatch(resetMatch)
-                        navController.popBackStack()
+                        goBackToDialog(navController, selectedDateStr)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth()
                 ) { Text("Eliminar", color = Color.White) }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Button(
-                    onClick = { isEditMode = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen),
-                    modifier = Modifier.weight(1f)
-                ) { Text("Editar", color = Color.Black) }
             }
 
         } else {
@@ -693,7 +802,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
             Spacer(modifier = Modifier.height(8.dp))
 
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(players) { player ->
+                items(sortedPlayers) { player ->
                     val isSummoned = summonedIds.contains(player.id)
                     val containerColor = if (isSummoned) com.example.entrenamientos.ui.theme.SuccessGreen else com.example.entrenamientos.ui.theme.AttendanceRed
 
@@ -715,14 +824,34 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
-                        Text(
-                            text = displayName,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = containerColor
-                        )
+                        val dDisplay = player.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
+                        val baseName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = dDisplay,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = containerColor,
+                                modifier = Modifier.width(36.dp),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = " · ",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = containerColor
+                            )
+                            Text(
+                                text = baseName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = containerColor
+                            )
+                        }
 
                         if (isSummoned) {
                             Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = containerColor)
@@ -770,13 +899,28 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text("Motivo de desconvocatoria:", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
-                    val displayName = if (playerToUnsummon?.lastName?.isNotBlank() == true) "${playerToUnsummon?.name} ${playerToUnsummon?.lastName}" else playerToUnsummon?.name ?: ""
-                    Text(
-                        text = displayName,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
+                    val dDisplay = playerToUnsummon?.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
+                    val baseName = if (playerToUnsummon?.lastName?.isNotBlank() == true) "${playerToUnsummon?.name} ${playerToUnsummon?.lastName}" else playerToUnsummon?.name ?: ""
+
+                    Row(modifier = Modifier.align(Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = dDisplay,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(42.dp),
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = " · ",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = baseName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             },
             text = {
@@ -832,8 +976,11 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
         else content.split("|").map { quarter -> quarter.split(",").mapNotNull { it.toLongOrNull() } }
     }
 
+    val playerSortComparator = compareBy<com.example.entrenamientos.data.Player> { it.dorsal.isNullOrBlank() }
+        .thenBy { it.dorsal?.toIntOrNull() ?: 999 }
+
     val currentQuarter = lineups.size + 1
-    val summonedPlayers = players.filter { match.summonedPlayers.contains(it.id) }
+    val summonedPlayers = players.filter { match.summonedPlayers.contains(it.id) }.sortedWith(playerSortComparator)
 
     val forcedPlayersForQ3 = remember(currentQuarter, lineups, summonedPlayers) {
         if (currentQuarter == 3 && lineups.size == 2) {
@@ -849,9 +996,17 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
 
     var showTotalDialog by remember { mutableStateOf(false) }
 
+    val dayOfWeek = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+    val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+    val matchDateFormatted = "$dayOfWeek ${date.dayOfMonth} de $monthName"
+
+    androidx.activity.compose.BackHandler {
+        goBackToDialog(navController, selectedDateStr)
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Quintetos", style = MaterialTheme.typography.headlineMedium)
-        Text("vs ${match.opponent} - ${match.date}", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+        Text("vs ${match.opponent} - $matchDateFormatted", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
 
         if (currentQuarter <= 4) {
@@ -885,14 +1040,36 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
                             Text("Q${i + 1}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = if (isCurrent) Color.Black else Color.DarkGray)
                             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = if (isCurrent) Color.Gray else Color.LightGray)
 
-                            if (isCompleted) {
-                                val quarterPlayers = players.filter { lineups[i].contains(it.id) }
-                                quarterPlayers.forEach { p ->
-                                    Text(p.name, style = MaterialTheme.typography.bodySmall, fontSize = 11.sp, maxLines = 1, textAlign = TextAlign.Center, color = Color.Black)
-                                }
-                            } else {
-                                repeat(5) {
-                                    Text("•", style = MaterialTheme.typography.bodySmall, fontSize = 11.sp, color = if (isFuture) Color.Gray.copy(alpha = 0.5f) else Color.Gray, textAlign = TextAlign.Center)
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                if (isCompleted) {
+                                    val quarterPlayers = players.filter { lineups[i].contains(it.id) }.sortedWith(playerSortComparator)
+                                    quarterPlayers.forEach { p ->
+                                        val dDisplay = p.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().height(18.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(text = dDisplay, fontSize = 11.sp, modifier = Modifier.width(26.dp), textAlign = TextAlign.Center, color = Color.Black)
+                                            Text(text = " · ", fontSize = 11.sp, color = Color.Black)
+                                            Text(text = p.name, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Color.Black)
+                                        }
+                                    }
+                                } else {
+                                    repeat(5) {
+                                        val dotColor = if (isCurrent) Color.Black else Color.Gray.copy(alpha = 0.5f)
+                                        val dotWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Normal
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth().height(18.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "•",
+                                                fontSize = 16.sp,
+                                                fontWeight = dotWeight,
+                                                color = dotColor
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -900,41 +1077,33 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-        }
 
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = if (currentQuarter > 4) Arrangement.Center else Arrangement.Top
-        ) {
-            if (currentQuarter <= 4) {
-                item {
-                    val quarterTitle = when (currentQuarter) {
-                        1 -> "Quinteto 1er Cuarto"
-                        2 -> "Quinteto 2º Cuarto"
-                        3 -> "Quinteto 3er Cuarto"
-                        4 -> "Quinteto 4º Cuarto"
-                        else -> "Quinteto"
-                    }
-                    Text(quarterTitle, style = MaterialTheme.typography.titleLarge)
+            val quarterTitle = when (currentQuarter) {
+                1 -> "Quinteto 1er Cuarto"
+                2 -> "Quinteto 2º Cuarto"
+                3 -> "Quinteto 3er Cuarto"
+                4 -> "Quinteto 4º Cuarto"
+                else -> "Quinteto"
+            }
+            Text(quarterTitle, style = MaterialTheme.typography.titleLarge)
 
-                    val counterColor = when {
-                        currentSelection.size == 5 -> com.example.entrenamientos.ui.theme.SuccessGreen
-                        currentSelection.size > 5 -> com.example.entrenamientos.ui.theme.AttendanceRed
-                        else -> Color.Gray
-                    }
-                    Text("Seleccionadas: ${currentSelection.size}/5", style = MaterialTheme.typography.bodyMedium, color = counterColor, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
+            val counterColor = when {
+                currentSelection.size == 5 -> com.example.entrenamientos.ui.theme.SuccessGreen
+                currentSelection.size > 5 -> com.example.entrenamientos.ui.theme.AttendanceRed
+                else -> Color.Gray
+            }
+            Text("Seleccionadas: ${currentSelection.size}/5", style = MaterialTheme.typography.bodyMedium, color = counterColor, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
 
-                    if (currentQuarter == 3 && forcedPlayersForQ3.size > 5) {
-                        Text("¡Error de rotación! Has dejado a más de 5 jugadoras sin jugar en los primeros cuartos. No caben en pista. Pulsa 'Empezar de 0'.", color = com.example.entrenamientos.ui.theme.AttendanceRed, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                }
+            if (currentQuarter == 3 && forcedPlayersForQ3.size > 5) {
+                Text("¡Error de rotación! Has dejado a más de 5 jugadoras sin jugar en los primeros cuartos. No caben en pista. Pulsa 'Empezar de 0'.", color = com.example.entrenamientos.ui.theme.AttendanceRed, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
+            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 items(summonedPlayers) { player ->
                     val isSelected = currentSelection.contains(player.id)
                     val isForced = currentQuarter == 3 && forcedPlayersForQ3.contains(player.id)
-
                     val isBanned = currentQuarter == 3 && lineups.size >= 2 && lineups[0].contains(player.id) && lineups[1].contains(player.id)
 
                     val isWarning = when {
@@ -950,43 +1119,92 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
                         else -> Color.White
                     }
 
+                    val cellShape = MaterialTheme.shapes.small
+                    val cellHeight = 48.dp
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .background(containerColor)
-                            .clickable(enabled = !isBanned && !isForced) {
-                                if (isSelected) {
-                                    currentSelection = currentSelection - player.id
-                                } else if (currentSelection.size < 5) {
-                                    currentSelection = currentSelection + player.id
-                                } else {
-                                    android.widget.Toast.makeText(context, "Ya has seleccionado 5 jugadoras", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(vertical = 3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val dDisplay = player.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
                         val baseName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
                         val quartersPlayed = lineups.count { it.contains(player.id) }
-                        val displayName = if (currentQuarter > 1) "$baseName ($quartersPlayed)" else baseName
+                        val nameDisplay = if (currentQuarter > 1) "$baseName ($quartersPlayed)" else baseName
 
-                        Text(
-                            text = displayName,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontSize = 17.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isBanned || isSelected) Color.White else Color.Black
-                        )
+                        Box(
+                            modifier = Modifier
+                                .width(48.dp)
+                                .height(cellHeight)
+                                .clip(cellShape)
+                                .background(containerColor)
+                                .clickable(enabled = !isBanned && !isForced) {
+                                    if (isSelected) {
+                                        currentSelection = currentSelection - player.id
+                                    } else if (currentSelection.size < 5) {
+                                        currentSelection = currentSelection + player.id
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Ya has seleccionado 5 jugadoras", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = dDisplay,
+                                fontSize = 17.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isBanned || isSelected) Color.White else Color.Black,
+                                textAlign = TextAlign.Center
+                            )
+                        }
 
-                        if (isSelected) {
-                            Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = Color.White)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(cellHeight)
+                                .clip(cellShape)
+                                .background(containerColor)
+                                .clickable(enabled = !isBanned && !isForced) {
+                                    if (isSelected) {
+                                        currentSelection = currentSelection - player.id
+                                    } else if (currentSelection.size < 5) {
+                                        currentSelection = currentSelection + player.id
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Ya has seleccionado 5 jugadoras", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                .padding(horizontal = 12.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = nameDisplay,
+                                    fontSize = 16.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isBanned || isSelected) Color.White else Color.Black,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+
+                                if (isSelected) {
+                                    Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = Color.White)
+                                }
+                            }
                         }
                     }
                 }
-            } else {
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
                 item {
                     Column(
                         modifier = Modifier
@@ -1004,8 +1222,13 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
                                 Column(modifier = Modifier.padding(8.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
                                     Text("1er Cuarto", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.Black)
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color.Gray.copy(alpha = 0.3f))
-                                    players.filter { lineups[0].contains(it.id) }.forEach { p ->
-                                        Text(p.name, fontSize = 16.sp, maxLines = 1, fontWeight = FontWeight.Medium)
+                                    players.filter { lineups[0].contains(it.id) }.sortedWith(playerSortComparator).forEach { p ->
+                                        val dDisplay = p.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                            Text(text = dDisplay, fontSize = 16.sp, modifier = Modifier.width(36.dp), textAlign = TextAlign.Center, color = Color.Black)
+                                            Text(text = " · ", fontSize = 16.sp, color = Color.Black)
+                                            Text(text = p.name, fontSize = 16.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Color.Black)
+                                        }
                                     }
                                 }
                             }
@@ -1017,8 +1240,13 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
                                 Column(modifier = Modifier.padding(8.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
                                     Text("2º Cuarto", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.Black)
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color.Gray.copy(alpha = 0.3f))
-                                    players.filter { lineups[1].contains(it.id) }.forEach { p ->
-                                        Text(p.name, fontSize = 16.sp, maxLines = 1, fontWeight = FontWeight.Medium)
+                                    players.filter { lineups[1].contains(it.id) }.sortedWith(playerSortComparator).forEach { p ->
+                                        val dDisplay = p.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                            Text(text = dDisplay, fontSize = 16.sp, modifier = Modifier.width(36.dp), textAlign = TextAlign.Center, color = Color.Black)
+                                            Text(text = " · ", fontSize = 16.sp, color = Color.Black)
+                                            Text(text = p.name, fontSize = 16.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Color.Black)
+                                        }
                                     }
                                 }
                             }
@@ -1032,8 +1260,13 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
                                 Column(modifier = Modifier.padding(8.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
                                     Text("3er Cuarto", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.Black)
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color.Gray.copy(alpha = 0.3f))
-                                    players.filter { lineups[2].contains(it.id) }.forEach { p ->
-                                        Text(p.name, fontSize = 16.sp, maxLines = 1, fontWeight = FontWeight.Medium)
+                                    players.filter { lineups[2].contains(it.id) }.sortedWith(playerSortComparator).forEach { p ->
+                                        val dDisplay = p.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                            Text(text = dDisplay, fontSize = 16.sp, modifier = Modifier.width(36.dp), textAlign = TextAlign.Center, color = Color.Black)
+                                            Text(text = " · ", fontSize = 16.sp, color = Color.Black)
+                                            Text(text = p.name, fontSize = 16.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Color.Black)
+                                        }
                                     }
                                 }
                             }
@@ -1045,8 +1278,13 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
                                 Column(modifier = Modifier.padding(8.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
                                     Text("4º Cuarto", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.Black)
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color.Gray.copy(alpha = 0.3f))
-                                    players.filter { lineups[3].contains(it.id) }.forEach { p ->
-                                        Text(p.name, fontSize = 16.sp, maxLines = 1, fontWeight = FontWeight.Medium)
+                                    players.filter { lineups[3].contains(it.id) }.sortedWith(playerSortComparator).forEach { p ->
+                                        val dDisplay = p.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
+                                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                            Text(text = dDisplay, fontSize = 16.sp, modifier = Modifier.width(36.dp), textAlign = TextAlign.Center, color = Color.Black)
+                                            Text(text = " · ", fontSize = 16.sp, color = Color.Black)
+                                            Text(text = p.name, fontSize = 16.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Color.Black)
+                                        }
                                     }
                                 }
                             }
@@ -1065,39 +1303,56 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Button(
-                onClick = { navController.popBackStack() },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                modifier = Modifier.weight(1f),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp)
-            ) { Text("Volver", color = Color.White, fontSize = 13.sp, maxLines = 1) }
 
-            Button(
-                onClick = {
-                    viewModel.saveTrainingNote(selectedDateStr, match.teamYear, "QUINTETOS", "", quintetosNote)
-                    currentSelection = setOf()
-                },
-                enabled = lineups.isNotEmpty() || currentSelection.isNotEmpty(),
-                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
-                modifier = Modifier.weight(1f),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp)
-            ) { Text("Empezar de 0", color = Color.White, fontSize = 13.sp, maxLines = 1) }
+        if (currentQuarter <= 4) {
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { goBackToDialog(navController, selectedDateStr) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Volver", color = Color.White, fontSize = 13.sp, maxLines = 1) }
 
-            if (currentQuarter <= 4) {
+                    Button(
+                        onClick = {
+                            val newLineups = lineups.toMutableList()
+                            newLineups.add(currentSelection.toList())
+                            val newContent = newLineups.joinToString("|") { q -> q.joinToString(",") }
+                            viewModel.saveTrainingNote(selectedDateStr, match.teamYear, "QUINTETOS", newContent, quintetosNote)
+                            currentSelection = setOf()
+                        },
+                        enabled = currentSelection.size == 5,
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen),
+                        modifier = Modifier.weight(1f)
+                    ) { Text(if (currentQuarter < 4) "Siguiente" else "Guardar", color = Color.Black, fontSize = 13.sp, maxLines = 1) }
+                }
+
                 Button(
                     onClick = {
-                        val newLineups = lineups.toMutableList()
-                        newLineups.add(currentSelection.toList())
-                        val newContent = newLineups.joinToString("|") { q -> q.joinToString(",") }
-                        viewModel.saveTrainingNote(selectedDateStr, match.teamYear, "QUINTETOS", newContent, quintetosNote)
+                        viewModel.saveTrainingNote(selectedDateStr, match.teamYear, "QUINTETOS", "", quintetosNote)
                         currentSelection = setOf()
                     },
-                    enabled = currentSelection.size == 5,
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen),
-                    modifier = Modifier.weight(1f),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp)
-                ) { Text(if (currentQuarter < 4) "Siguiente" else "Guardar", color = Color.Black, fontSize = 13.sp, maxLines = 1) }
+                    enabled = lineups.isNotEmpty() || currentSelection.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Empezar de 0", color = Color.White, fontSize = 13.sp, maxLines = 1) }
+            }
+        } else {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { goBackToDialog(navController, selectedDateStr) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                    modifier = Modifier.weight(1f)
+                ) { Text("Volver", color = Color.White, fontSize = 13.sp, maxLines = 1) }
+
+                Button(
+                    onClick = {
+                        viewModel.saveTrainingNote(selectedDateStr, match.teamYear, "QUINTETOS", "", quintetosNote)
+                        currentSelection = setOf()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
+                    modifier = Modifier.weight(1f)
+                ) { Text("Empezar de 0", color = Color.White, fontSize = 13.sp, maxLines = 1) }
             }
         }
     }
@@ -1106,30 +1361,89 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
         AlertDialog(
             onDismissRequest = { showTotalDialog = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-            modifier = Modifier.fillMaxWidth(0.95f).padding(16.dp),
+            modifier = Modifier.fillMaxWidth(0.98f).padding(16.dp),
             title = {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Nº de Cuartos / Jugadora", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Acta de Cuartos / Jugadora", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.Black)
                     HorizontalDivider(modifier = Modifier.padding(top = 8.dp), color = Color.Black, thickness = 1.dp)
                 }
             },
             text = {
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                    val sortedPlayers = summonedPlayers.sortedByDescending { p -> lineups.count { it.contains(p.id) } }
-                    items(sortedPlayers) { player ->
-                        val quartersPlayed = lineups.count { it.contains(player.id) }
-                        val quarterText = if (quartersPlayed == 1) "1 Cuarto" else "$quartersPlayed Cuartos"
-                        val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
+                    val sortedPlayersDialog = summonedPlayers.sortedWith(playerSortComparator)
+
+                    items(sortedPlayersDialog) { player ->
+                        val dDisplay = player.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
+                        val baseName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
 
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 6.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("• $displayName", style = MaterialTheme.typography.bodyLarge)
-                            Text("($quarterText)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            // Nombre y Apellido
+                            Text(
+                                text = baseName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Black,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Columna de Dorsal (Sin cajita alrededor, solo el número limpio)
+                            Text(
+                                text = dDisplay,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.width(36.dp),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            // Tabla de 1x4 (X más grande que encaja perfectamente dentro de las celdas unidas)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                for (qIndex in 0 until 4) {
+                                    val playedInQuarter = lineups.getOrNull(qIndex)?.contains(player.id) == true
+
+                                    val modifierCell = if (qIndex == 0) {
+                                        Modifier
+                                            .size(26.dp)
+                                            .border(1.dp, Color.DarkGray)
+                                            .background(Color.White)
+                                    } else {
+                                        Modifier
+                                            .size(26.dp)
+                                            .offset(x = (-1 * qIndex).dp)
+                                            .border(1.dp, Color.DarkGray)
+                                            .background(Color.White)
+                                    }
+
+                                    Box(
+                                        modifier = modifierCell,
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (playedInQuarter) {
+                                            Text(
+                                                text = "X",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.Black,
+                                                fontSize = 17.sp // Tamaño de la X más grande pero sin salirse de los bordes de la celda de 26dp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1158,6 +1472,10 @@ fun ResultadoScreen(viewModel: BasketViewModel, navController: NavController) {
     var resVisitor by remember { mutableStateOf(match.resultVisitor?.toString() ?: "") }
     var ftMade by remember { mutableStateOf(match.ftMade.toString()) }
     var ftAttempted by remember { mutableStateOf(match.ftAttempted.toString()) }
+
+    androidx.activity.compose.BackHandler {
+        goBackToDialog(navController, selectedDateStr)
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Resultado del Partido", style = MaterialTheme.typography.headlineMedium)
@@ -1205,7 +1523,7 @@ fun ResultadoScreen(viewModel: BasketViewModel, navController: NavController) {
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { navController.popBackStack() },
+                onClick = { goBackToDialog(navController, selectedDateStr) },
                 colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
                 modifier = Modifier.weight(1f)
             ) {
@@ -1231,7 +1549,7 @@ fun ResultadoScreen(viewModel: BasketViewModel, navController: NavController) {
                             ftAttempted = ftAttempted.toIntOrNull() ?: 0
                         )
                         viewModel.addOrUpdateMatch(updatedMatch)
-                        navController.popBackStack()
+                        goBackToDialog(navController, selectedDateStr)
                     }
                 },
                 modifier = Modifier.weight(1f),
@@ -1261,6 +1579,10 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
     val dayOfWeek = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
     val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
 
+    androidx.activity.compose.BackHandler {
+        goBackToDialog(navController, dateStr)
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(text = "$titlePrefix $teamTitle:", style = MaterialTheme.typography.headlineMedium)
         Text(text = "$dayOfWeek ${date.dayOfMonth} de $monthName", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
@@ -1278,7 +1600,7 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { navController.popBackStack() },
+                onClick = { goBackToDialog(navController, dateStr) },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
             ) { Text("Cancelar", color = Color.White) }
@@ -1286,7 +1608,7 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
             Button(
                 onClick = {
                     viewModel.saveTrainingNote(date = dateStr, teamYear = teamYear, type = noteType, content = noteContent, existingNote = existingNote)
-                    navController.popBackStack()
+                    goBackToDialog(navController, dateStr)
                 },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
@@ -1306,19 +1628,22 @@ fun StatsScreen(viewModel: BasketViewModel) {
         }
     }
 
+    val activeTeamObj = teamsList.find { it.year == selectedTeam }
+    val trackMatches = activeTeamObj?.trackMatches ?: true
+
     val attendances by viewModel.getAllAttendancesByTeam(selectedTeam).collectAsState(initial = emptyList())
     val allMatches by viewModel.matches.collectAsState()
     val teamMatches = allMatches.filter { it.teamYear == selectedTeam }
 
     val players by viewModel.getPlayersForTeam(selectedTeam).collectAsState(initial = emptyList())
 
-    val expandedAttendanceMonths = remember { androidx.compose.runtime.mutableStateMapOf<java.time.YearMonth, Boolean>() }
-    val expandedMatchMonths = remember { androidx.compose.runtime.mutableStateMapOf<java.time.YearMonth, Boolean>() }
-    val expandedMatchDetails = remember { androidx.compose.runtime.mutableStateMapOf<Long, Boolean>() }
+    val expandedAttendanceMonths = remember { mutableStateMapOf<java.time.YearMonth, Boolean>() }
+    val expandedMatchMonths = remember { mutableStateMapOf<java.time.YearMonth, Boolean>() }
+    val expandedMatchDetails = remember { mutableStateMapOf<Long, Boolean>() }
     var isSeasonAttendanceExpanded by remember { mutableStateOf(false) }
     var isSeasonMatchesExpanded by remember { mutableStateOf(false) }
 
-    val expandedWeekDetails = remember { androidx.compose.runtime.mutableStateMapOf<java.time.LocalDate, Boolean>() }
+    val expandedWeekDetails = remember { mutableStateMapOf<java.time.LocalDate, Boolean>() }
 
     data class PlayerAttendanceCount(
         val player: com.example.entrenamientos.data.Player,
@@ -1362,8 +1687,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
 
             if (attendances.isNotEmpty()) {
                 item {
-                    val activeTeam = teamsList.find { it.year == selectedTeam }
-                    val activeColor = activeTeam?.colorHex?.let {
+                    val activeColor = activeTeamObj?.colorHex?.let {
                         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
                     } ?: Color.Black
 
@@ -1394,7 +1718,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                             justified = pAtts.count { it.status == 1 },
                             unjustified = pAtts.count { it.status == 2 }
                         )
-                    }.sortedByDescending { it.present } // ORDENADO DE MAYOR A MENOR ASISTENCIA
+                    }.sortedByDescending { it.present }
 
                     item {
                         Card(
@@ -1405,7 +1729,6 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                 if (sortedPlayersByAttendance.isEmpty()) {
                                     Text("No hay jugadoras registradas.", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
                                 } else {
-                                    // CABECERA DE LA TABLA
                                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                         Text("Jugadoras", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                                         Row {
@@ -1420,11 +1743,8 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                             }
                                         }
                                     }
-
-                                    // LÍNEA SEPARADORA DE CABECERA
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = Color.Black, thickness = 1.dp)
 
-                                    // FILAS DE JUGADORAS
                                     sortedPlayersByAttendance.forEachIndexed { index, entry ->
                                         val displayName = if (entry.player.lastName.isNotBlank()) "${entry.player.name} ${entry.player.lastName}" else entry.player.name
                                         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1441,8 +1761,6 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                                 }
                                             }
                                         }
-
-                                        // FINAS LÍNEAS SEPARADORAS ENTRE JUGADORAS
                                         if (index < sortedPlayersByAttendance.size - 1) {
                                             HorizontalDivider(color = Color.Black.copy(alpha = 0.15f), thickness = 0.5.dp)
                                         }
@@ -1482,8 +1800,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 val isExpanded = expandedAttendanceMonths[month] ?: false
 
                 item {
-                    val activeTeam = teamsList.find { it.year == selectedTeam }
-                    val activeColor = activeTeam?.colorHex?.let {
+                    val activeColor = activeTeamObj?.colorHex?.let {
                         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
                     } ?: Color.Black
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1548,7 +1865,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                     justified = pAtts.count { it.status == 1 },
                                     unjustified = pAtts.count { it.status == 2 }
                                 )
-                            }.sortedByDescending { it.present } // ORDENADO DE MAYOR A MENOR ASISTENCIA
+                            }.sortedByDescending { it.present }
 
                             item {
                                 Card(
@@ -1559,7 +1876,6 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                         if (sortedPlayersByWeekAttendance.isEmpty()) {
                                             Text("No hay jugadoras registradas.", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
                                         } else {
-                                            // CABECERA DE LA TABLA
                                             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                                 Text("Jugadoras", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                                                 Row {
@@ -1574,11 +1890,8 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                                     }
                                                 }
                                             }
-
-                                            // LÍNEA SEPARADORA DE CABECERA
                                             HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = Color.Black, thickness = 1.dp)
 
-                                            // FILAS DE JUGADORAS
                                             sortedPlayersByWeekAttendance.forEachIndexed { index, entry ->
                                                 val displayName = if (entry.player.lastName.isNotBlank()) "${entry.player.name} ${entry.player.lastName}" else entry.player.name
                                                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1595,8 +1908,6 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                                         }
                                                     }
                                                 }
-
-                                                // FINAS LÍNEAS SEPARADORAS ENTRE JUGADORAS
                                                 if (index < sortedPlayersByWeekAttendance.size - 1) {
                                                     HorizontalDivider(color = Color.Black.copy(alpha = 0.15f), thickness = 0.5.dp)
                                                 }
@@ -1611,273 +1922,269 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 }
             }
 
-            item {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                Text("Medias de Temporada", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            val playedMatches = teamMatches.filter { it.resultLocal != null && it.resultVisitor != null }
-
-            if (playedMatches.isEmpty()) {
-                item { Text("No hay partidos jugados todavía.", color = Color.Gray) }
-            } else {
-                var totalWins = 0
-                var totalLosses = 0
-                var localWins = 0
-                var localLosses = 0
-                var visitorWins = 0
-                var visitorLosses = 0
-                var totalScored = 0
-                var totalReceived = 0
-                var totalFtMade = 0
-                var totalFtAttempted = 0
-
-                playedMatches.forEach { m ->
-                    val localScore = m.resultLocal ?: 0
-                    val visitorScore = m.resultVisitor ?: 0
-
-                    if (m.isLocal) {
-                        totalScored += localScore
-                        totalReceived += visitorScore
-                        if (localScore > visitorScore) {
-                            totalWins++
-                            localWins++
-                        } else if (localScore < visitorScore) {
-                            totalLosses++
-                            localLosses++
-                        }
-                    } else {
-                        totalScored += visitorScore
-                        totalReceived += localScore
-                        if (visitorScore > localScore) {
-                            totalWins++
-                            visitorWins++
-                        } else if (visitorScore < localScore) {
-                            totalLosses++
-                            visitorLosses++
-                        }
-                    }
-                    totalFtMade += m.ftMade
-                    totalFtAttempted += m.ftAttempted
+            // --- BLOQUES QUE SOLO SE MUESTRAN SI trackMatches ES TRUE ---
+            if (trackMatches) {
+                item {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                    Text("Medias de Temporada", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                val avgScored = if (playedMatches.isNotEmpty()) totalScored.toFloat() / playedMatches.size else 0f
-                val avgReceived = if (playedMatches.isNotEmpty()) totalReceived.toFloat() / playedMatches.size else 0f
-                val ftPercentage = if (totalFtAttempted > 0) (totalFtMade.toFloat() / totalFtAttempted) * 100 else 0f
+                val playedMatches = teamMatches.filter { it.resultLocal != null && it.resultVisitor != null }
+
+                if (playedMatches.isEmpty()) {
+                    item { Text("No hay partidos jugados todavía.", color = Color.Gray) }
+                } else {
+                    var totalWins = 0
+                    var totalLosses = 0
+                    var localWins = 0
+                    var localLosses = 0
+                    var visitorWins = 0
+                    var visitorLosses = 0
+                    var totalScored = 0
+                    var totalReceived = 0
+                    var totalFtMade = 0
+                    var totalFtAttempted = 0
+
+                    playedMatches.forEach { m ->
+                        val localScore = m.resultLocal ?: 0
+                        val visitorScore = m.resultVisitor ?: 0
+
+                        if (m.isLocal) {
+                            totalScored += localScore
+                            totalReceived += visitorScore
+                            if (localScore > visitorScore) {
+                                totalWins++; localWins++
+                            } else if (localScore < visitorScore) {
+                                totalLosses++; localLosses++
+                            }
+                        } else {
+                            totalScored += visitorScore
+                            totalReceived += localScore
+                            if (visitorScore > localScore) {
+                                totalWins++; visitorWins++
+                            } else if (visitorScore < localScore) {
+                                totalLosses++; visitorLosses++
+                            }
+                        }
+                        totalFtMade += m.ftMade
+                        totalFtAttempted += m.ftAttempted
+                    }
+
+                    val avgScored = if (playedMatches.isNotEmpty()) totalScored.toFloat() / playedMatches.size else 0f
+                    val avgReceived = if (playedMatches.isNotEmpty()) totalReceived.toFloat() / playedMatches.size else 0f
+                    val ftPercentage = if (totalFtAttempted > 0) (totalFtMade.toFloat() / totalFtAttempted) * 100 else 0f
+
+                    item {
+                        val activeColor = activeTeamObj?.colorHex?.let {
+                            try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
+                        } ?: Color.Black
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = activeColor.copy(alpha = 0.15f))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("Resultados: $totalWins / $totalLosses", fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Resultados (Local): $localWins / $localLosses", fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Resultados (Visitante): $visitorWins / $visitorLosses", fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Puntos Anotados / partido: ${String.format(java.util.Locale.US, "%.1f", avgScored)} pts", fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Puntos Recibidos / partido: ${String.format(java.util.Locale.US, "%.1f", avgReceived)} pts", fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Tiros Libres (%): ${String.format(java.util.Locale.US, "%.1f", ftPercentage)}% ($totalFtMade/$totalFtAttempted)", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
 
                 item {
-                    val activeTeam = teamsList.find { it.year == selectedTeam }
-                    val activeColor = activeTeam?.colorHex?.let {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                    Text("Resumen de Convocatorias", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                val matchesWithConvocatoria = teamMatches.filter { it.isConvocatoriaSaved }
+
+                item {
+                    val activeColor = activeTeamObj?.colorHex?.let {
                         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
                     } ?: Color.Black
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = activeColor.copy(alpha = 0.15f))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { isSeasonMatchesExpanded = !isSeasonMatchesExpanded }
+                            .padding(vertical = 4.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text("Resultados: $totalWins / $totalLosses", fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("Resultados (Local): $localWins / $localLosses", fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("Resultados (Visitante): $visitorWins / $visitorLosses", fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("Puntos Anotados / partido: ${String.format(java.util.Locale.US, "%.1f", avgScored)} pts", fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("Puntos Recibidos / partido: ${String.format(java.util.Locale.US, "%.1f", avgReceived)} pts", fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("Tiros Libres (%): ${String.format(java.util.Locale.US, "%.1f", ftPercentage)}% ($totalFtMade/$totalFtAttempted)", fontWeight = FontWeight.Bold)
-                        }
+                        Text("TEMPORADA", style = MaterialTheme.typography.titleMedium, color = activeColor)
+                        Icon(
+                            imageVector = if (isSeasonMatchesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Expandir/Colapsar",
+                            tint = Color.Gray
+                        )
                     }
                 }
-            }
 
-            item {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                Text("Resumen de Convocatorias", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            val matchesWithConvocatoria = teamMatches.filter { it.isConvocatoriaSaved }
-
-            item {
-                val activeTeam = teamsList.find { it.year == selectedTeam }
-                val activeColor = activeTeam?.colorHex?.let {
-                    try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
-                } ?: Color.Black
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.small)
-                        .clickable { isSeasonMatchesExpanded = !isSeasonMatchesExpanded }
-                        .padding(vertical = 4.dp, horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("TEMPORADA", style = MaterialTheme.typography.titleMedium, color = activeColor)
-                    Icon(
-                        imageVector = if (isSeasonMatchesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Expandir/Colapsar",
-                        tint = Color.Gray
-                    )
-                }
-            }
-
-            if (isSeasonMatchesExpanded) {
-                val unsummonedStats: Map<Long, Map<String, Int>> = run {
-                    val stats = mutableMapOf<Long, MutableMap<String, Int>>()
-                    matchesWithConvocatoria.forEach { match ->
-                        match.unsummonedReasons.forEach { (playerId, reason) ->
-                            val playerStats = stats.getOrPut(playerId) { mutableMapOf() }
-                            playerStats[reason] = playerStats.getOrDefault(reason, 0) + 1
+                if (isSeasonMatchesExpanded) {
+                    val unsummonedStats: Map<Long, Map<String, Int>> = run {
+                        val stats = mutableMapOf<Long, MutableMap<String, Int>>()
+                        matchesWithConvocatoria.forEach { match ->
+                            match.unsummonedReasons.forEach { (playerId, reason) ->
+                                val playerStats = stats.getOrPut(playerId) { mutableMapOf() }
+                                playerStats[reason] = playerStats.getOrDefault(reason, 0) + 1
+                            }
                         }
+                        stats
                     }
-                    stats
-                }
 
-                val sortedPlayersByUnsummoned = players
-                    .map { player -> player to (unsummonedStats[player.id]?.values?.sum() ?: 0) }
-                    .sortedByDescending { it.second }
+                    val sortedPlayersByUnsummoned = players
+                        .map { player -> player to (unsummonedStats[player.id]?.values?.sum() ?: 0) }
+                        .sortedByDescending { it.second }
 
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            if (sortedPlayersByUnsummoned.all { it.second == 0 }) {
-                                Text("No hay desconvocatorias registradas.", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
-                            } else {
-                                sortedPlayersByUnsummoned.forEach { (player, total) ->
-                                    val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
-                                    val label = if (total == 1) "1 desconvocatoria" else "$total desconvocatorias"
-                                    Column(modifier = Modifier.padding(bottom = 10.dp)) {
-                                        Text(
-                                            text = "• $displayName ($label)",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (total > 0) com.example.entrenamientos.ui.theme.AttendanceRed else Color.DarkGray
-                                        )
-                                        unsummonedStats[player.id]?.forEach { (reason, count) ->
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                if (sortedPlayersByUnsummoned.all { it.second == 0 }) {
+                                    Text("No hay desconvocatorias registradas.", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
+                                } else {
+                                    sortedPlayersByUnsummoned.forEach { (player, total) ->
+                                        val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
+                                        val label = if (total == 1) "1 desconvocatoria" else "$total desconvocatorias"
+                                        Column(modifier = Modifier.padding(bottom = 10.dp)) {
                                             Text(
-                                                text = "   - $reason: $count",
+                                                text = "• $displayName ($label)",
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                color = Color.DarkGray
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (total > 0) com.example.entrenamientos.ui.theme.AttendanceRed else Color.DarkGray
                                             )
+                                            unsummonedStats[player.id]?.forEach { (reason, count) ->
+                                                Text(
+                                                    text = "   - $reason: $count",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = Color.DarkGray
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-
-            if (teamMatches.isEmpty()) {
-                item { Text("No hay partidos programados.", color = Color.Gray) }
-            } else {
-                val matchesByMonth = teamMatches.groupBy {
-                    java.time.YearMonth.from(java.time.LocalDate.parse(it.date))
-                }
-                val sortedMatchMonths = matchesByMonth.toSortedMap(compareByDescending { it })
-
-                sortedMatchMonths.forEach { (month, matchesInMonth) ->
-                    val isExpanded = expandedMatchMonths[month] ?: false
-
-                    item {
-                        val activeTeam = teamsList.find { it.year == selectedTeam }
-                        val activeColor = activeTeam?.colorHex?.let {
-                            try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
-                        } ?: Color.Black
                         Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(MaterialTheme.shapes.small)
-                                .clickable { expandedMatchMonths[month] = !isExpanded }
-                                .padding(vertical = 4.dp, horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = month.format(formatterMonth).uppercase(),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = activeColor
-                            )
-                            Icon(
-                                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Expandir/Colapsar",
-                                tint = Color.Gray
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
                     }
+                }
 
-                    if (isExpanded) {
-                        val sortedMatches = matchesInMonth.sortedByDescending { it.date }
+                if (teamMatches.isEmpty()) {
+                    item { Text("No hay partidos programados.", color = Color.Gray) }
+                } else {
+                    val matchesByMonth = teamMatches.groupBy {
+                        java.time.YearMonth.from(java.time.LocalDate.parse(it.date))
+                    }
+                    val sortedMatchMonths = matchesByMonth.toSortedMap(compareByDescending { it })
 
-                        items(sortedMatches) { match ->
-                            val matchDateObj = java.time.LocalDate.parse(match.date)
-                            val matchDayOfWeek = matchDateObj.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
-                            val matchMonthName = matchDateObj.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).lowercase()
-                            val formattedDate = "$matchDayOfWeek ${matchDateObj.dayOfMonth} de $matchMonthName · ${match.time}"
+                    sortedMatchMonths.forEach { (month, matchesInMonth) ->
+                        val isExpanded = expandedMatchMonths[month] ?: false
 
-                            val isMatchExpanded = expandedMatchDetails[match.id] ?: false
-
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
+                        item {
+                            val activeColor = activeTeamObj?.colorHex?.let {
+                                try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
+                            } ?: Color.Black
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(MaterialTheme.shapes.small)
+                                    .clickable { expandedMatchMonths[month] = !isExpanded }
+                                    .padding(vertical = 4.dp, horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { expandedMatchDetails[match.id] = !isMatchExpanded },
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("vs ${match.opponent}", fontWeight = FontWeight.Bold)
-                                            Text(formattedDate, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                                        }
-                                        Icon(
-                                            imageVector = if (isMatchExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                            contentDescription = "Expandir/Colapsar",
-                                            tint = Color.Gray
-                                        )
-                                    }
+                                Text(
+                                    text = month.format(formatterMonth).uppercase(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = activeColor
+                                )
+                                Icon(
+                                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Expandir/Colapsar",
+                                    tint = Color.Gray
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
 
-                                    if (isMatchExpanded) {
-                                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        if (isExpanded) {
+                            val sortedMatches = matchesInMonth.sortedByDescending { it.date }
 
-                                        if (!match.isConvocatoriaSaved) {
-                                            Text("Convocatoria no guardada todavía.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                                        } else {
-                                            val convocadas = players.filter { match.summonedPlayers.contains(it.id) }
-                                            val desconvocadas = players.filter { match.unsummonedReasons.containsKey(it.id) }
+                            items(sortedMatches) { match ->
+                                val matchDateObj = java.time.LocalDate.parse(match.date)
+                                val matchDayOfWeek = matchDateObj.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+                                val matchMonthName = matchDateObj.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).lowercase()
+                                val formattedDate = "$matchDayOfWeek ${matchDateObj.dayOfMonth} de $matchMonthName · ${match.time}"
 
-                                            Text("✅ Convocadas (${convocadas.size})", style = MaterialTheme.typography.titleSmall, color = com.example.entrenamientos.ui.theme.SuccessGreen, fontWeight = FontWeight.Bold)
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            convocadas.forEach { p ->
-                                                val displayName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
-                                                Text("• $displayName", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
+                                val isMatchExpanded = expandedMatchDetails[match.id] ?: false
+
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { expandedMatchDetails[match.id] = !isMatchExpanded },
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("vs ${match.opponent}", fontWeight = FontWeight.Bold)
+                                                Text(formattedDate, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                                             }
+                                            Icon(
+                                                imageVector = if (isMatchExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                contentDescription = "Expandir/Colapsar",
+                                                tint = Color.Gray
+                                            )
+                                        }
 
-                                            Spacer(modifier = Modifier.height(10.dp))
-                                            Text("❌ Desconvocadas (${desconvocadas.size})", style = MaterialTheme.typography.titleSmall, color = com.example.entrenamientos.ui.theme.AttendanceRed, fontWeight = FontWeight.Bold)
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            desconvocadas.forEach { p ->
-                                                val displayName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
-                                                Column(modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)) {
-                                                    Text(displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                                    Text(
-                                                        "Motivo: ${match.unsummonedReasons[p.id]?.takeIf { it.isNotBlank() } ?: "Sin motivo especificado"}",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = Color.DarkGray
-                                                    )
+                                        if (isMatchExpanded) {
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                                            if (!match.isConvocatoriaSaved) {
+                                                Text("Convocatoria no guardada todavía.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                                            } else {
+                                                val convocadas = players.filter { match.summonedPlayers.contains(it.id) }
+                                                val desconvocadas = players.filter { match.unsummonedReasons.containsKey(it.id) }
+
+                                                Text("✅ Convocadas (${convocadas.size})", style = MaterialTheme.typography.titleSmall, color = com.example.entrenamientos.ui.theme.SuccessGreen, fontWeight = FontWeight.Bold)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                convocadas.forEach { p ->
+                                                    val displayName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
+                                                    Text("• $displayName", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 8.dp, bottom = 2.dp))
+                                                }
+
+                                                Spacer(modifier = Modifier.height(10.dp))
+                                                Text("❌ Desconvocadas (${desconvocadas.size})", style = MaterialTheme.typography.titleSmall, color = com.example.entrenamientos.ui.theme.AttendanceRed, fontWeight = FontWeight.Bold)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                desconvocadas.forEach { p ->
+                                                    val displayName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
+                                                    Column(modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)) {
+                                                        Text(displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                                        Text(
+                                                            "Motivo: ${match.unsummonedReasons[p.id]?.takeIf { it.isNotBlank() } ?: "Sin motivo especificado"}",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = Color.DarkGray
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
@@ -1924,6 +2231,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     var playerToEdit by remember { mutableStateOf<com.example.entrenamientos.data.Player?>(null) }
     var playerNameInput by remember { mutableStateOf("") }
     var playerLastNameInput by remember { mutableStateOf("") }
+    var playerDorsalInput by remember { mutableStateOf("") }
 
     var showScheduleDialog by remember { mutableStateOf(false) }
     var scheduleToEdit by remember { mutableStateOf<com.example.entrenamientos.data.TrainingSchedule?>(null) }
@@ -1941,7 +2249,6 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     var matchLocationInput by remember { mutableStateOf("") }
     var matchOpponentInput by remember { mutableStateOf("") }
 
-    // Variables para Pop-ups de eliminación
     var teamToDelete by remember { mutableStateOf<com.example.entrenamientos.data.Team?>(null) }
     var playerToDelete by remember { mutableStateOf<com.example.entrenamientos.data.Player?>(null) }
     var scheduleToDelete by remember { mutableStateOf<com.example.entrenamientos.data.TrainingSchedule?>(null) }
@@ -1957,6 +2264,14 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     val selectedBlue = Color(0xFF2196F3)
     val unselectedLightBlue = Color(0xFFE3F2FD)
 
+    val currentTeamObj = teamsList.find { it.year == selectedTeam }
+    val trackMatches = currentTeamObj?.trackMatches ?: true
+
+    val jugadorasTitle = "Jugadoras (${players.size})"
+    val dayInitials = mapOf(1 to "L", 2 to "M", 3 to "X", 4 to "J", 5 to "V", 6 to "S", 7 to "D")
+    val teamDaysStr = teamSchedules.map { it.dayOfWeek }.sorted().joinToString(" / ") { dayInitials[it] ?: "" }
+    val horariosTitle = if (teamDaysStr.isNotEmpty()) "Horarios ($teamDaysStr)" else "Horarios"
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Ajustes", style = MaterialTheme.typography.headlineMedium.copy(fontSize = sp(24)))
         Spacer(modifier = Modifier.height(16.dp))
@@ -1971,6 +2286,39 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 }
             }
         } else {
+            androidx.compose.foundation.lazy.LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items(teamsList) { team ->
+                    val teamColor = team.colorHex.let {
+                        try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
+                    }
+                    val isTeamSelected = selectedTeam == team.year
+                    Button(
+                        onClick = {
+                            selectedTeam = team.year
+                            if (!team.trackMatches && activeTab == "PARTIDOS") {
+                                activeTab = "EQUIPOS"
+                            }
+                        },
+                        contentPadding = buttonContentPadding,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isTeamSelected) teamColor else teamColor.copy(alpha = 0.25f)
+                        )
+                    ) {
+                        Text(
+                            team.name,
+                            fontSize = sp(13),
+                            color = if (isTeamSelected) Color.White else Color.Black
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Column(modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = { activeTab = "EQUIPOS" },
@@ -1987,25 +2335,59 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                         modifier = Modifier.weight(1f),
                         contentPadding = buttonContentPadding,
                         colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "JUGADORAS") selectedBlue else unselectedLightBlue)
-                    ) { Text("Jugadoras", color = if (activeTab == "JUGADORAS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
+                    ) { Text(jugadorasTitle, color = if (activeTab == "JUGADORAS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
 
                     Button(
                         onClick = { activeTab = "HORARIOS" },
                         modifier = Modifier.weight(1f),
                         contentPadding = buttonContentPadding,
                         colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "HORARIOS") selectedBlue else unselectedLightBlue)
-                    ) { Text("Horarios", color = if (activeTab == "HORARIOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
+                    ) { Text(horariosTitle, color = if (activeTab == "HORARIOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { activeTab = "PARTIDOS" },
-                        modifier = Modifier.weight(1f),
-                        contentPadding = buttonContentPadding,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "PARTIDOS") selectedBlue else unselectedLightBlue)
-                    ) { Text("Partidos", color = if (activeTab == "PARTIDOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Button(
+                            onClick = { if (trackMatches) activeTab = "PARTIDOS" },
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = buttonContentPadding,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!trackMatches) Color.LightGray.copy(alpha = 0.5f)
+                                else if (activeTab == "PARTIDOS") selectedBlue
+                                else unselectedLightBlue
+                            )
+                        ) { Text("Partidos", color = if (!trackMatches) Color.Gray else if (activeTab == "PARTIDOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
+
+                        if (!trackMatches) {
+                            androidx.compose.foundation.Canvas(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                            ) {
+                                val w = size.width
+                                val h = size.height
+                                val mutedRed = Color(0xFFA05B5B)
+                                val strokeW = (3.5f * scale).dp.toPx()
+
+                                drawLine(
+                                    color = mutedRed,
+                                    start = androidx.compose.ui.geometry.Offset(w * 0.1f, h * 0.15f),
+                                    end = androidx.compose.ui.geometry.Offset(w * 0.9f, h * 0.85f),
+                                    strokeWidth = strokeW,
+                                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                )
+                                drawLine(
+                                    color = mutedRed,
+                                    start = androidx.compose.ui.geometry.Offset(w * 0.9f, h * 0.15f),
+                                    end = androidx.compose.ui.geometry.Offset(w * 0.1f, h * 0.85f),
+                                    strokeWidth = strokeW,
+                                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                                )
+                            }
+                        }
+                    }
 
                     Button(
                         onClick = { activeTab = "FESTIVOS" },
@@ -2017,37 +2399,6 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-
-            if (activeTab in listOf("JUGADORAS", "HORARIOS", "PARTIDOS")) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    LazyColumn(modifier = Modifier.weight(1f).height(50.dp)) {
-                        item {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                teamsList.forEach { team ->
-                                    val teamColor = team.colorHex.let {
-                                        try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
-                                    }
-                                    val isTeamSelected = selectedTeam == team.year
-                                    Button(
-                                        onClick = { selectedTeam = team.year },
-                                        contentPadding = buttonContentPadding,
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (isTeamSelected) teamColor else teamColor.copy(alpha = 0.25f)
-                                        )
-                                    ) {
-                                        Text(
-                                            team.name,
-                                            fontSize = sp(13),
-                                            color = if (isTeamSelected) Color.White else Color.Black
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
 
             when (activeTab) {
                 "EQUIPOS" -> {
@@ -2081,21 +2432,99 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     ) { Text("Añadir Nuevo Equipo", color = Color.Black, fontSize = sp(14)) }
                 }
                 "JUGADORAS" -> {
-                    LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(players) { player ->
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
-                                Text(text = displayName, style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)))
-                                Row {
-                                    IconButton(onClick = { playerToEdit = player; playerNameInput = player.name; playerLastNameInput = player.lastName; showPlayerDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
-                                    IconButton(onClick = { playerToDelete = player }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+                    val sortedPlayers = players.sortedWith(
+                        compareBy<com.example.entrenamientos.data.Player> { it.dorsal.isNullOrBlank() }
+                            .thenBy { it.dorsal?.toIntOrNull() ?: 999 }
+                    )
+
+                    LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        items(sortedPlayers) { player ->
+                            val displayName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
+                            val dDisplay = player.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
+
+                            val cellBg = Color.LightGray.copy(alpha = 0.2f)
+                            val cellShape = MaterialTheme.shapes.small
+                            val cellHeight = (42 * scale).dp
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width((48 * scale).dp)
+                                        .height(cellHeight)
+                                        .clip(cellShape)
+                                        .background(cellBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = dDisplay,
+                                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(17)),
+                                        fontWeight = FontWeight.Normal
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(cellHeight)
+                                        .clip(cellShape)
+                                        .background(cellBg)
+                                        .padding(horizontal = 12.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Text(
+                                        text = displayName,
+                                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)),
+                                        fontWeight = FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(cellHeight)
+                                        .clip(cellShape)
+                                        .background(cellBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    IconButton(onClick = {
+                                        playerToEdit = player
+                                        playerNameInput = player.name
+                                        playerLastNameInput = player.lastName
+                                        playerDorsalInput = player.dorsal ?: ""
+                                        showPlayerDialog = true
+                                    }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(cellHeight)
+                                        .clip(cellShape)
+                                        .background(cellBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    IconButton(onClick = { playerToDelete = player }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
+                                    }
                                 }
                             }
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        onClick = { playerToEdit = null; playerNameInput = ""; playerLastNameInput = ""; showPlayerDialog = true },
+                        onClick = {
+                            playerToEdit = null
+                            playerNameInput = ""
+                            playerLastNameInput = ""
+                            playerDorsalInput = ""
+                            showPlayerDialog = true
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = buttonContentPadding,
                         colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
@@ -2105,6 +2534,9 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     var firstTrainingDateInput by remember(selectedTeam) {
                         mutableStateOf(teamsList.find { it.year == selectedTeam }?.firstTrainingDate ?: "2026-09-01")
                     }
+
+                    val teamDaysUsed = teamSchedules.map { it.dayOfWeek }
+                    val availableDaysSettings = (1..5).filter { !teamDaysUsed.contains(it) }
 
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         item {
@@ -2136,32 +2568,96 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                         }
 
                         items(teamSchedules) { schedule ->
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                Column {
-                                    Text(text = daysOfWeek[schedule.dayOfWeek - 1], style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), fontWeight = FontWeight.Bold)
-                                    Text(text = "${schedule.startTime} - ${schedule.endTime}", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(13)), color = Color.Gray)
+                            val cellBg = Color.LightGray.copy(alpha = 0.2f)
+                            val cellShape = MaterialTheme.shapes.small
+                            val cellHeight = (42 * scale).dp
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(cellHeight)
+                                        .clip(cellShape)
+                                        .background(cellBg)
+                                        .padding(horizontal = 16.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = daysOfWeek[schedule.dayOfWeek - 1],
+                                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "${schedule.startTime} - ${schedule.endTime}",
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(13)),
+                                            color = Color.DarkGray
+                                        )
+                                    }
                                 }
-                                Row {
-                                    IconButton(onClick = { scheduleToEdit = schedule; scheduleDayInput = schedule.dayOfWeek; scheduleStartInput = schedule.startTime; scheduleEndInput = schedule.endTime; scheduleError = ""; showScheduleDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
-                                    IconButton(onClick = { scheduleToDelete = schedule }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(cellHeight)
+                                        .clip(cellShape)
+                                        .background(cellBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    IconButton(onClick = {
+                                        scheduleToEdit = schedule;
+                                        scheduleDayInput = schedule.dayOfWeek;
+                                        scheduleStartInput = schedule.startTime;
+                                        scheduleEndInput = schedule.endTime;
+                                        scheduleError = "";
+                                        showScheduleDialog = true
+                                    }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(cellHeight)
+                                        .clip(cellShape)
+                                        .background(cellBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    IconButton(onClick = { scheduleToDelete = schedule }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
+                                    }
                                 }
                             }
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        onClick = { scheduleToEdit = null; scheduleDayInput = 1; scheduleStartInput = "17:00"; scheduleEndInput = "18:00"; scheduleError = ""; showScheduleDialog = true },
+                        onClick = {
+                            scheduleToEdit = null;
+                            scheduleDayInput = availableDaysSettings.firstOrNull() ?: 1;
+                            scheduleStartInput = "17:00";
+                            scheduleEndInput = "18:00";
+                            scheduleError = "";
+                            showScheduleDialog = true
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = buttonContentPadding,
+                        enabled = availableDaysSettings.isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                    ) { Text("Añadir Horario", color = Color.Black, fontSize = sp(14)) }
+                    ) { Text(if (availableDaysSettings.isEmpty()) "Todos los días cubiertos" else "Añadir Horario", color = Color.Black, fontSize = sp(14)) }
                 }
                 "PARTIDOS" -> {
                     val matchesByMonth = teamMatches.groupBy { java.time.YearMonth.from(java.time.LocalDate.parse(it.date)) }
                     val sortedMonths = matchesByMonth.toSortedMap(compareByDescending { it })
                     val formatterMonth = java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale("es", "ES"))
-                    val activeTeam = teamsList.find { it.year == selectedTeam }
-                    val activeColor = activeTeam?.colorHex?.let {
+                    val activeColor = currentTeamObj?.colorHex?.let {
                         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
                     } ?: Color.Black
 
@@ -2205,15 +2701,63 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                                     val dayOfWeekName = dateObj.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
                                     val shortDate = String.format(java.util.Locale.getDefault(), "%02d/%02d", dateObj.dayOfMonth, dateObj.monthValue)
 
-                                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.small).background(Color.LightGray.copy(alpha = 0.2f)).padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(text = "$dayOfWeekName $shortDate - ${match.time}", style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), fontWeight = FontWeight.Bold)
-                                            Text(text = "Polideportivo ${match.location}", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(13)))
-                                            Text(text = if (match.isLocal) "CD Huerto - ${match.opponent}" else "${match.opponent} - CD Huerto", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(13)))
+                                    val cellBg = Color.LightGray.copy(alpha = 0.2f)
+                                    val cellShape = MaterialTheme.shapes.small
+                                    val fixedCellHeight = (64 * scale).dp // Altura fija uniforme para todas las celdas de partidos
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Caja 1: Resumen del Partido (Alto fijo uniforme)
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(fixedCellHeight)
+                                                .clip(cellShape)
+                                                .background(cellBg)
+                                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                            contentAlignment = Alignment.CenterStart
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalArrangement = Arrangement.Center
+                                            ) {
+                                                Text(text = "$dayOfWeekName $shortDate - ${match.time}", style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(13)), fontWeight = FontWeight.Bold, maxLines = 1)
+                                                Spacer(modifier = Modifier.height(1.dp))
+                                                Text(text = "Polideportivo ${match.location}", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(12)), color = Color.DarkGray, maxLines = 1)
+                                                Spacer(modifier = Modifier.height(1.dp))
+                                                Text(text = if (match.isLocal) "CD Huerto - ${match.opponent}" else "${match.opponent} - CD Huerto", style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(12)), color = Color.DarkGray, maxLines = 1)
+                                            }
                                         }
-                                        Row {
-                                            IconButton(onClick = { matchToEdit = match; matchStep = 1; val parts = match.date.split("-"); matchDateInput = "${parts[2]}-${parts[1]}-${parts[0]}"; matchTimeInput = match.time; matchIsLocalInput = match.isLocal; matchLocationInput = match.location; matchOpponentInput = match.opponent; showMatchDialog = true }) { Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray) }
-                                            IconButton(onClick = { matchToDelete = match }) { Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed) }
+
+                                        // Caja 2: Lápiz (Editar) - Alto fijo uniforme
+                                        Box(
+                                            modifier = Modifier
+                                                .size(fixedCellHeight)
+                                                .clip(cellShape)
+                                                .background(cellBg),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            IconButton(onClick = { matchToEdit = match; matchStep = 1; val parts = match.date.split("-"); matchDateInput = "${parts[2]}-${parts[1]}-${parts[0]}"; matchTimeInput = match.time; matchIsLocalInput = match.isLocal; matchLocationInput = match.location; matchOpponentInput = match.opponent; showMatchDialog = true }) {
+                                                Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray)
+                                            }
+                                        }
+
+                                        // Caja 3: Papelera (Eliminar) - Alto fijo uniforme
+                                        Box(
+                                            modifier = Modifier
+                                                .size(fixedCellHeight)
+                                                .clip(cellShape)
+                                                .background(cellBg),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            IconButton(onClick = { matchToDelete = match }) {
+                                                Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
+                                            }
                                         }
                                     }
                                 }
@@ -2240,6 +2784,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
         var eName by remember { mutableStateOf(teamToEdit!!.name) }
         var eCategory by remember { mutableStateOf(teamToEdit!!.categoryYear) }
         var eColor by remember { mutableStateOf(teamToEdit!!.colorHex) }
+        var eTrackMatches by remember { mutableStateOf(teamToEdit!!.trackMatches) }
 
         AlertDialog(
             onDismissRequest = { teamToEdit = null },
@@ -2254,14 +2799,35 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     Spacer(Modifier.height(16.dp))
 
                     FullColorPicker(colorHex = eColor, onColorChanged = { eColor = it })
+                    Spacer(Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { eTrackMatches = !eTrackMatches }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = eTrackMatches,
+                            onCheckedChange = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "¿Quieres hacer un seguimiento de los partidos de este equipo?",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Black
+                        )
+                    }
                 }
             },
             confirmButton = {},
             dismissButton = {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { teamToEdit = null }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) { Text("Cancelar", color = Color.White) }
+                    Button(onClick = { teamToEdit = null }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)) { Text("Cancelar", color = Color.White) }
                     Button(onClick = {
-                        viewModel.updateTeamData(teamToEdit!!.year, eName, eCategory, eColor)
+                        viewModel.updateTeamData(teamToEdit!!.year, eName, eCategory, eColor, eTrackMatches)
                         teamToEdit = null
                     }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Actualizar", color = Color.Black) }
                 }
@@ -2277,18 +2843,49 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(value = playerNameInput, onValueChange = { playerNameInput = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.weight(1f))
-                        OutlinedTextField(value = playerLastNameInput, onValueChange = { playerLastNameInput = it }, label = { Text("Apellido") }, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(
+                            value = playerNameInput,
+                            onValueChange = { playerNameInput = it },
+                            label = { Text("Nombre (*)") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = playerLastNameInput,
+                            onValueChange = { playerLastNameInput = it },
+                            label = { Text("Apellido (*)") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1.3f)
+                        )
+                        OutlinedTextField(
+                            value = playerDorsalInput,
+                            onValueChange = { if(it.length <= 2 && it.all { char -> char.isDigit() }) playerDorsalInput = it },
+                            label = { Text("Nº") },
+                            singleLine = true,
+                            modifier = Modifier.width(64.dp),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { showPlayerDialog = false }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)) { Text("Cancelar", color = Color.White) }
                         Button(onClick = {
-                            if (playerNameInput.isNotBlank()) {
-                                if (playerToEdit == null) viewModel.addPlayer(playerNameInput, playerLastNameInput, selectedTeam)
-                                else viewModel.updatePlayer(playerToEdit!!.copy(name = playerNameInput, lastName = playerLastNameInput))
-                                showPlayerDialog = false
+                            if (playerNameInput.isNotBlank() && playerLastNameInput.isNotBlank()) {
+                                val hasDuplicate = players.any { it.dorsal == playerDorsalInput && playerDorsalInput.isNotBlank() && it.id != playerToEdit?.id }
+
+                                if (hasDuplicate) {
+                                    android.widget.Toast.makeText(context, "El dorsal $playerDorsalInput ya está en uso", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    if (playerToEdit == null) {
+                                        viewModel.addPlayer(playerNameInput, playerLastNameInput, playerDorsalInput, selectedTeam)
+                                    } else {
+                                        viewModel.updatePlayer(playerToEdit!!.copy(name = playerNameInput, lastName = playerLastNameInput, dorsal = playerDorsalInput))
+                                    }
+                                    showPlayerDialog = false
+                                }
+                            } else {
+                                android.widget.Toast.makeText(context, "Nombre y Apellido son obligatorios", android.widget.Toast.LENGTH_SHORT).show()
                             }
                         }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text(if (playerToEdit == null) "Guardar" else "Actualizar", color = Color.Black) }
                     }
@@ -2298,6 +2895,13 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     }
 
     if (showScheduleDialog) {
+        val teamDaysUsed = teamSchedules.map { it.dayOfWeek }
+        val currentAvailableDays = if (scheduleToEdit != null) {
+            ((1..5).filter { !teamDaysUsed.contains(it) } + scheduleToEdit!!.dayOfWeek).sorted().distinct()
+        } else {
+            (1..5).filter { !teamDaysUsed.contains(it) }
+        }
+
         androidx.compose.ui.window.Dialog(onDismissRequest = { showScheduleDialog = false }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
             Card(modifier = Modifier.fillMaxWidth(0.98f).padding(8.dp), shape = MaterialTheme.shapes.medium) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -2306,9 +2910,17 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     if (scheduleError.isNotEmpty()) { Text(scheduleError, color = com.example.entrenamientos.ui.theme.AttendanceRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp)) }
                     Text("Día de la semana:", style = MaterialTheme.typography.labelSmall)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Button(onClick = { if (scheduleDayInput > 1) scheduleDayInput-- else scheduleDayInput = 5 }) { Text("-") }
-                        Text(daysOfWeek[scheduleDayInput - 1])
-                        Button(onClick = { if (scheduleDayInput < 5) scheduleDayInput++ else scheduleDayInput = 1 }) { Text("+") }
+                        Button(onClick = {
+                            val idx = currentAvailableDays.indexOf(scheduleDayInput)
+                            if (idx > 0) scheduleDayInput = currentAvailableDays[idx - 1] else if (currentAvailableDays.isNotEmpty()) scheduleDayInput = currentAvailableDays.last()
+                        }) { Text("-") }
+
+                        Text(if (currentAvailableDays.isEmpty()) "" else daysOfWeek[scheduleDayInput - 1])
+
+                        Button(onClick = {
+                            val idx = currentAvailableDays.indexOf(scheduleDayInput)
+                            if (idx < currentAvailableDays.size - 1) scheduleDayInput = currentAvailableDays[idx + 1] else if (currentAvailableDays.isNotEmpty()) scheduleDayInput = currentAvailableDays.first()
+                        }) { Text("+") }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     androidx.compose.material3.OutlinedButton(onClick = {
@@ -2358,23 +2970,52 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                         }
                     }
                     Spacer(modifier = Modifier.height(24.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (matchStep > 1) {
-                            Button(onClick = { matchStep-- }, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) { Text("Atrás", color = Color.White, fontSize = sp(13), maxLines = 1) }
-                        }
-                        Button(onClick = { showMatchDialog = false }, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)) { Text("Cancelar", color = Color.White, fontSize = sp(13), maxLines = 1) }
-                        if (matchStep < 4) {
-                            Button(onClick = { matchStep++ }, modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Siguiente", color = Color.Black, fontSize = sp(13), maxLines = 1) }
-                        } else {
+
+                    if (matchStep == 1) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
-                                onClick = {
-                                    val parts = matchDateInput.split("-"); val dateForDb = "${parts[2]}-${parts[1]}-${parts[0]}"; val newMatch = com.example.entrenamientos.data.Match(id = matchToEdit?.id ?: 0, date = dateForDb, time = matchTimeInput, isLocal = matchIsLocalInput, location = matchLocationInput, opponent = matchOpponentInput, teamYear = selectedTeam); viewModel.addOrUpdateMatch(newMatch); showMatchDialog = false
-                                },
+                                onClick = { showMatchDialog = false },
                                 modifier = Modifier.weight(1f),
-                                enabled = matchLocationInput.isNotBlank() && matchOpponentInput.isNotBlank(),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                            ) { Text("Cancelar", color = Color.White, fontSize = sp(13), maxLines = 1) }
+
+                            Button(
+                                onClick = { matchStep++ },
+                                modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                            ) { Text(if (matchToEdit == null) "Guardar" else "Actualizar", color = Color.Black, fontSize = sp(13), maxLines = 1) }
+                            ) { Text("Siguiente", color = Color.Black, fontSize = sp(13), maxLines = 1) }
+                        }
+                    } else {
+                        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = { matchStep-- },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                                ) { Text("Atrás", color = Color.White, fontSize = sp(13), maxLines = 1) }
+
+                                if (matchStep < 4) {
+                                    Button(
+                                        onClick = { matchStep++ },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                                    ) { Text("Siguiente", color = Color.Black, fontSize = sp(13), maxLines = 1) }
+                                } else {
+                                    Button(
+                                        onClick = {
+                                            val parts = matchDateInput.split("-"); val dateForDb = "${parts[2]}-${parts[1]}-${parts[0]}"; val newMatch = com.example.entrenamientos.data.Match(id = matchToEdit?.id ?: 0, date = dateForDb, time = matchTimeInput, isLocal = matchIsLocalInput, location = matchLocationInput, opponent = matchOpponentInput, teamYear = selectedTeam); viewModel.addOrUpdateMatch(newMatch); showMatchDialog = false
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        enabled = matchLocationInput.isNotBlank() && matchOpponentInput.isNotBlank(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                                    ) { Text(if (matchToEdit == null) "Guardar" else "Actualizar", color = Color.Black, fontSize = sp(13), maxLines = 1) }
+                                }
+                            }
+                            Button(
+                                onClick = { showMatchDialog = false },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                            ) { Text("Cancelar", color = Color.White, fontSize = sp(13), maxLines = 1) }
                         }
                     }
                 }
@@ -2382,7 +3023,6 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
         }
     }
 
-    // --- POP-UPS DE CONFIRMACIÓN DE ELIMINACIÓN ---
     if (teamToDelete != null) {
         AlertDialog(
             onDismissRequest = { teamToDelete = null },
@@ -2460,7 +3100,6 @@ fun FullColorPicker(
     var hue by remember { mutableFloatStateOf(hsl[0]) }
     var lightness by remember { mutableFloatStateOf(hsl[2]) }
 
-    // Usamos el HSL de Android directamente para evitar grises por conversiones de Compose
     val argb = androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(hue, 1f, lightness))
     val currentColor = Color(argb)
     val pureArgb = androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(hue, 1f, 0.5f))
@@ -2490,7 +3129,7 @@ fun FullColorPicker(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp) // Alinea el degradado exactamente con los topes del deslizador
+                    .padding(horizontal = 14.dp)
                     .height(12.dp)
                     .clip(CircleShape)
                     .background(
@@ -2518,7 +3157,7 @@ fun FullColorPicker(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp) // Alinea el degradado exactamente con los topes del deslizador
+                    .padding(horizontal = 14.dp)
                     .height(12.dp)
                     .clip(CircleShape)
                     .background(
@@ -2535,7 +3174,7 @@ fun FullColorPicker(
                 colors = SliderDefaults.colors(
                     activeTrackColor = Color.Transparent,
                     inactiveTrackColor = Color.Transparent,
-                    thumbColor = Color.Gray // Gris para que siempre sea visible en los extremos
+                    thumbColor = Color.Gray
                 )
             )
         }
@@ -2549,6 +3188,7 @@ fun AddTeamWizard(viewModel: BasketViewModel, onDismiss: () -> Unit) {
     var teamName by remember { mutableStateOf("") }
     var teamCategoryStr by remember { mutableStateOf("") }
     var selectedColorHex by remember { mutableStateOf("#2196F3") }
+    var trackMatches by remember { mutableStateOf(true) }
 
     var tempSchedules by remember { mutableStateOf(listOf<com.example.entrenamientos.data.TrainingSchedule>()) }
     val daysOfWeek = listOf("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
@@ -2567,6 +3207,7 @@ fun AddTeamWizard(viewModel: BasketViewModel, onDismiss: () -> Unit) {
     var tempPlayers by remember { mutableStateOf(listOf<com.example.entrenamientos.data.Player>()) }
     var pName by remember { mutableStateOf("") }
     var pLast by remember { mutableStateOf("") }
+    var pDorsal by remember { mutableStateOf("") }
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(modifier = Modifier.fillMaxWidth(0.98f).padding(8.dp), shape = MaterialTheme.shapes.medium) {
@@ -2583,6 +3224,27 @@ fun AddTeamWizard(viewModel: BasketViewModel, onDismiss: () -> Unit) {
                         Spacer(modifier = Modifier.height(16.dp))
 
                         FullColorPicker(colorHex = selectedColorHex, onColorChanged = { selectedColorHex = it })
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable { trackMatches = !trackMatches }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            androidx.compose.material3.Checkbox(
+                                checked = trackMatches,
+                                onCheckedChange = null
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "¿Quieres hacer un seguimiento de los partidos de este equipo?",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Black
+                            )
+                        }
                     }
                     2 -> {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -2619,7 +3281,6 @@ fun AddTeamWizard(viewModel: BasketViewModel, onDismiss: () -> Unit) {
                         }, modifier = Modifier.fillMaxWidth(), enabled = availableDays.isNotEmpty()) { Text("Añadir Entrenamiento") }
 
                         Spacer(modifier = Modifier.height(8.dp))
-                        // Modificador que hace que crezca progresivamente y quita el hueco vacío
                         LazyColumn(modifier = Modifier.wrapContentHeight().heightIn(max = 150.dp)) {
                             items(tempSchedules) { s ->
                                 Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -2631,21 +3292,55 @@ fun AddTeamWizard(viewModel: BasketViewModel, onDismiss: () -> Unit) {
                     }
                     3 -> {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(value = pName, onValueChange = { pName = it }, label = { Text("Nombre") }, singleLine = true, modifier = Modifier.weight(1f))
-                            OutlinedTextField(value = pLast, onValueChange = { pLast = it }, label = { Text("Apellido") }, singleLine = true, modifier = Modifier.weight(1f))
+                            OutlinedTextField(
+                                value = pName,
+                                onValueChange = { pName = it },
+                                label = { Text("Nombre (*)") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = pLast,
+                                onValueChange = { pLast = it },
+                                label = { Text("Apellido (*)") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1.3f)
+                            )
+                            OutlinedTextField(
+                                value = pDorsal,
+                                onValueChange = { if(it.length <= 2 && it.all { char -> char.isDigit() }) pDorsal = it },
+                                label = { Text("Nº") },
+                                singleLine = true,
+                                modifier = Modifier.width(64.dp),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                            )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(onClick = {
-                            if (pName.isNotBlank()) {
-                                tempPlayers = tempPlayers + com.example.entrenamientos.data.Player(name = pName, lastName = pLast, teamYear = 0)
-                                pName = ""; pLast = ""
+                            if (pName.isNotBlank() && pLast.isNotBlank()) {
+                                val hasDuplicate = tempPlayers.any { it.dorsal == pDorsal && pDorsal.isNotBlank() }
+
+                                if (hasDuplicate) {
+                                    android.widget.Toast.makeText(context, "El dorsal $pDorsal ya está en uso", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    tempPlayers = tempPlayers + com.example.entrenamientos.data.Player(name = pName, lastName = pLast, dorsal = pDorsal, teamYear = 0)
+                                    pName = ""; pLast = ""; pDorsal = ""
+                                }
+                            } else {
+                                android.widget.Toast.makeText(context, "Nombre y Apellido son obligatorios", android.widget.Toast.LENGTH_SHORT).show()
                             }
                         }, modifier = Modifier.fillMaxWidth()) { Text("Añadir Jugadora") }
                         Spacer(modifier = Modifier.height(8.dp))
                         LazyColumn(modifier = Modifier.wrapContentHeight().heightIn(max = 150.dp)) {
-                            items(tempPlayers) { p ->
-                                Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("${p.name} ${p.lastName}")
+                            val sortedTempPlayers = tempPlayers.sortedWith(
+                                compareBy<com.example.entrenamientos.data.Player> { it.dorsal.isNullOrBlank() }
+                                    .thenBy { it.dorsal?.toIntOrNull() ?: 999 }
+                            )
+
+                            items(sortedTempPlayers) { p ->
+                                val dDisplay = if (p.dorsal.isNullOrBlank()) "s.n." else p.dorsal
+                                Row(modifier = Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("$dDisplay · ${p.name} ${p.lastName}", fontWeight = FontWeight.Bold)
                                     Icon(Icons.Default.Delete, null, modifier = Modifier.clickable { tempPlayers = tempPlayers - p }, tint = Color.Red)
                                 }
                             }
@@ -2654,29 +3349,65 @@ fun AddTeamWizard(viewModel: BasketViewModel, onDismiss: () -> Unit) {
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+                if (step == 1) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (step > 1) {
-                            Button(onClick = { step-- }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) { Text("Atrás", color = Color.White) }
-                        }
-                        if (step < 3) {
-                            Button(onClick = {
-                                if (step == 1 && teamName.isBlank()) {
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                        ) { Text("Cancelar", color = Color.White) }
+
+                        Button(
+                            onClick = {
+                                if (teamName.isBlank()) {
                                     android.widget.Toast.makeText(context, "Rellena nombre del equipo", android.widget.Toast.LENGTH_SHORT).show()
-                                } else if (step == 2 && tempSchedules.isEmpty()) {
-                                    android.widget.Toast.makeText(context, "Añade al menos un entrenamiento", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
                                     step++
                                 }
-                            }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Siguiente", color = Color.Black) }
-                        } else {
-                            Button(onClick = {
-                                viewModel.addTeamWithDetails(teamName, teamCategoryStr, selectedColorHex, tempPlayers, tempSchedules)
-                                onDismiss()
-                            }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Finalizar", color = Color.Black) }
-                        }
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                        ) { Text("Siguiente", color = Color.Black) }
                     }
-                    Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)) { Text("Cancelar", color = Color.White) }
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { step-- },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                            ) { Text("Atrás", color = Color.White) }
+
+                            if (step < 3) {
+                                Button(
+                                    onClick = {
+                                        if (step == 2 && tempSchedules.isEmpty()) {
+                                            android.widget.Toast.makeText(context, "Añade al menos un entrenamiento", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            step++
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                                ) { Text("Siguiente", color = Color.Black) }
+                            } else {
+                                Button(
+                                    onClick = {
+                                        viewModel.addTeamWithDetails(teamName, teamCategoryStr, selectedColorHex, trackMatches, tempPlayers, tempSchedules)
+                                        onDismiss()
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                                ) { Text("Finalizar", color = Color.Black) }
+                            }
+                        }
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                        ) { Text("Cancelar", color = Color.White) }
+                    }
                 }
             }
         }
@@ -2751,31 +3482,59 @@ fun FestivosSettingsTab(viewModel: BasketViewModel) {
         Text("Festivos Registrados", style = MaterialTheme.typography.titleMedium.copy(fontSize = sp(16)))
         Spacer(modifier = Modifier.height(8.dp))
 
-        LazyColumn {
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth()
+        ) {
             items(holidays.sortedBy { it.date }) { holiday ->
+                val cellBg = Color.LightGray.copy(alpha = 0.2f)
+                val cellShape = MaterialTheme.shapes.small
+                val cellHeight = (42 * scale).dp // Filas más planas
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .background(Color.LightGray.copy(alpha = 0.2f), MaterialTheme.shapes.small)
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val hDate = java.time.LocalDate.parse(holiday.date)
                     val formatted = "${hDate.dayOfMonth} de ${hDate.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))} ${hDate.year}"
 
-                    Text(formatted, style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), color = Color.Red, fontWeight = FontWeight.Bold)
+                    // Caja 1: Fecha del festivo
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(cellHeight)
+                            .clip(cellShape)
+                            .background(cellBg)
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(
+                            text = formatted,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)),
+                            color = Color.Red,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
-                    IconButton(onClick = { holidayToDelete = holiday }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
+                    // Caja 2: Papelera (Eliminar)
+                    Box(
+                        modifier = Modifier
+                            .size(cellHeight)
+                            .clip(cellShape)
+                            .background(cellBg),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        IconButton(onClick = { holidayToDelete = holiday }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
+                        }
                     }
                 }
             }
         }
     }
 
-    // --- POP-UP DE CONFIRMACIÓN DE ELIMINACIÓN ---
     if (holidayToDelete != null) {
         AlertDialog(
             onDismissRequest = { holidayToDelete = null },

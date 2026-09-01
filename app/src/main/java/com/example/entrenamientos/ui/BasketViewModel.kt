@@ -143,10 +143,10 @@ class BasketViewModel @Inject constructor(
     }
 
     // --- OPERACIONES CON EQUIPOS ---
-    fun addTeamWithDetails(name: String, categoryYear: String, colorHex: String, players: List<Player>, schedules: List<TrainingSchedule>) {
+    fun addTeamWithDetails(name: String, categoryYear: String, colorHex: String, trackMatches: Boolean, players: List<Player>, schedules: List<TrainingSchedule>) {
         viewModelScope.launch {
             val newId = if (_teams.value.isEmpty()) 1 else _teams.value.maxOf { it.year } + 1
-            repository.insertTeam(Team(year = newId, name = name, categoryYear = categoryYear, colorHex = colorHex))
+            repository.insertTeam(Team(year = newId, name = name, categoryYear = categoryYear, colorHex = colorHex, trackMatches = trackMatches))
 
             schedules.forEach { repository.insertSchedule(it.copy(teamYear = newId)) }
             players.forEach { repository.addPlayer(it.copy(teamYear = newId)) }
@@ -155,9 +155,19 @@ class BasketViewModel @Inject constructor(
         }
     }
 
-    fun updateTeamData(teamId: Int, newName: String, newCategoryYear: String, newColorHex: String) {
+    fun updateTeamData(teamId: Int, newName: String, newCategoryYear: String, newColorHex: String, trackMatches: Boolean) {
         viewModelScope.launch {
-            repository.insertTeam(Team(year = teamId, name = newName, categoryYear = newCategoryYear, colorHex = newColorHex))
+            val existingTeam = _teams.value.find { it.year == teamId }
+            val firstTrainingDate = existingTeam?.firstTrainingDate ?: "2026-09-01"
+
+            repository.insertTeam(Team(
+                year = teamId,
+                name = newName,
+                categoryYear = newCategoryYear,
+                colorHex = newColorHex,
+                firstTrainingDate = firstTrainingDate,
+                trackMatches = trackMatches
+            ))
         }
     }
 
@@ -187,8 +197,8 @@ class BasketViewModel @Inject constructor(
     }
 
     // --- OPERACIONES CON JUGADORAS ---
-    fun addPlayer(name: String, lastName: String, teamYear: Int) {
-        val player = Player(name = name, lastName = lastName, teamYear = teamYear)
+    fun addPlayer(name: String, lastName: String, dorsal: String?, teamYear: Int) {
+        val player = Player(name = name, lastName = lastName, teamYear = teamYear, dorsal = dorsal)
         viewModelScope.launch { repository.addPlayer(player) }
     }
 

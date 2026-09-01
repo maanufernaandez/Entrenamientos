@@ -8,5 +8,6 @@ data class Player(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val lastName: String = "",
-    val teamYear: Int
+    val teamYear: Int,
+    val dorsal: String? = null
 )

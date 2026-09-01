@@ -9,5 +9,6 @@ data class Team(
     val name: String,
     val categoryYear: String,  // El año visible (opcional)
     val colorHex: String,
-    val firstTrainingDate: String = "2026-09-01"
+    val firstTrainingDate: String = "2026-09-01",
+    val trackMatches: Boolean = true
 )
