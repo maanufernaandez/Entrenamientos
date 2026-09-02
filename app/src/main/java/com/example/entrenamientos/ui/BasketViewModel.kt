@@ -143,19 +143,27 @@ class BasketViewModel @Inject constructor(
     }
 
     // --- OPERACIONES CON EQUIPOS ---
-    fun addTeamWithDetails(name: String, categoryYear: String, colorHex: String, trackMatches: Boolean, players: List<Player>, schedules: List<TrainingSchedule>) {
+
+    // Nueva función para añadir un equipo sin exigir horarios ni jugadores al inicio
+    fun addTeam(name: String, shortName: String, gender: String, categoryYear: String, colorHex: String, trackMatches: Boolean) {
         viewModelScope.launch {
             val newId = if (_teams.value.isEmpty()) 1 else _teams.value.maxOf { it.year } + 1
-            repository.insertTeam(Team(year = newId, name = name, categoryYear = categoryYear, colorHex = colorHex, trackMatches = trackMatches))
-
-            schedules.forEach { repository.insertSchedule(it.copy(teamYear = newId)) }
-            players.forEach { repository.addPlayer(it.copy(teamYear = newId)) }
-
+            val newTeam = Team(
+                year = newId,
+                name = name,
+                shortName = shortName,
+                gender = gender,
+                categoryYear = categoryYear,
+                colorHex = colorHex,
+                trackMatches = trackMatches
+            )
+            repository.insertTeam(newTeam)
             _selectedTeamYear.value = newId
         }
     }
 
-    fun updateTeamData(teamId: Int, newName: String, newCategoryYear: String, newColorHex: String, trackMatches: Boolean) {
+    // Actualizada para incorporar shortName y gender
+    fun updateTeamData(teamId: Int, newName: String, shortName: String, gender: String, newCategoryYear: String, newColorHex: String, trackMatches: Boolean) {
         viewModelScope.launch {
             val existingTeam = _teams.value.find { it.year == teamId }
             val firstTrainingDate = existingTeam?.firstTrainingDate ?: "2026-09-01"
@@ -163,6 +171,8 @@ class BasketViewModel @Inject constructor(
             repository.insertTeam(Team(
                 year = teamId,
                 name = newName,
+                shortName = shortName,
+                gender = gender,
                 categoryYear = newCategoryYear,
                 colorHex = newColorHex,
                 firstTrainingDate = firstTrainingDate,
