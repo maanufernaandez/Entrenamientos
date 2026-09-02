@@ -31,6 +31,9 @@ interface AppDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAttendances(attendances: List<Attendance>)
 
+    @Query("SELECT * FROM attendances WHERE teamYear = :year")
+    fun getAllAttendancesByTeam(year: Int): Flow<List<Attendance>>
+
     // --- MATCHES ---
     @Query("SELECT * FROM matches ORDER BY date ASC")
     fun getAllMatches(): Flow<List<Match>>
@@ -61,9 +64,6 @@ interface AppDao {
     @Delete
     suspend fun deleteSchedule(schedule: TrainingSchedule)
 
-    @Query("SELECT * FROM attendances WHERE teamYear = :year")
-    fun getAllAttendancesByTeam(year: Int): Flow<List<Attendance>>
-
     // --- HOLIDAYS ---
     @Query("SELECT * FROM holidays")
     fun getAllHolidays(): Flow<List<Holiday>>
@@ -74,10 +74,11 @@ interface AppDao {
     @Delete
     suspend fun deleteHoliday(holiday: Holiday)
 
+    // --- TEAMS ---
     @Query("SELECT * FROM teams")
-    fun getAllTeams(): kotlinx.coroutines.flow.Flow<List<Team>>
+    fun getAllTeams(): Flow<List<Team>>
 
-    @Insert(onConflict = androidx.room.OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTeam(team: Team)
 
     @Delete

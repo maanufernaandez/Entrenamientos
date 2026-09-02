@@ -18,26 +18,21 @@ class BasketViewModel @Inject constructor(
     private val repository: AppRepository
 ) : ViewModel() {
 
-    // --- ESTADOS DE EQUIPOS ---
+    // --- ESTADOS ---
     private val _teams = MutableStateFlow<List<Team>>(emptyList())
     val teams: StateFlow<List<Team>> = _teams.asStateFlow()
 
-    // --- ESTADOS PARA HORARIOS DE ENTRENAMIENTO ---
     private val _schedules = MutableStateFlow<List<TrainingSchedule>>(emptyList())
     val schedules: StateFlow<List<TrainingSchedule>> = _schedules.asStateFlow()
 
-    // --- ESTADOS PARA PARTIDOS ---
     private val _matches = MutableStateFlow<List<Match>>(emptyList())
     val matches: StateFlow<List<Match>> = _matches.asStateFlow()
 
-    // --- ESTADO PARA FESTIVOS ---
     private val _holidays = MutableStateFlow<List<Holiday>>(emptyList())
     val holidays: StateFlow<List<Holiday>> = _holidays.asStateFlow()
 
-    // --- ESTADO PARA VALIDACIÓN DE ASISTENCIAS ---
     private val _currentTeamAttendances = MutableStateFlow<List<Attendance>>(emptyList())
 
-    // --- ESTADOS DE NAVEGACIÓN Y SELECCIÓN ---
     private val _selectedDate = MutableStateFlow("2026-09-01")
     val selectedDate: StateFlow<String> = _selectedDate.asStateFlow()
 
@@ -46,7 +41,7 @@ class BasketViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            repository.getAllTeams().collect { list: List<Team> ->
+            repository.getAllTeams().collect { list ->
                 _teams.value = list
                 if (list.isNotEmpty() && _selectedTeamYear.value == 0) {
                     _selectedTeamYear.value = list.first().year
@@ -55,61 +50,34 @@ class BasketViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            repository.getAllSchedules().collect { list: List<TrainingSchedule> ->
+            repository.getAllSchedules().collect { list ->
                 _schedules.value = list
             }
         }
 
         viewModelScope.launch {
-            repository.getAllMatches().collect { list: List<Match> ->
+            repository.getAllMatches().collect { list ->
                 _matches.value = list
             }
         }
 
-        // --- CARGA INICIAL DE FESTIVOS RESTAURADA ---
         viewModelScope.launch {
-            repository.getAllHolidays().collect { list: List<Holiday> ->
+            repository.getAllHolidays().collect { list ->
                 if (list.isEmpty()) {
                     val defaultHolidays = listOf(
-                        Holiday("2026-10-12"),
-                        Holiday("2026-10-21"),
-                        Holiday("2026-10-30"),
-                        Holiday("2026-11-02"),
-                        Holiday("2026-11-30"),
-                        Holiday("2026-12-03"),
-                        Holiday("2026-12-04"),
-                        Holiday("2026-12-07"),
-                        Holiday("2026-12-08"),
-                        Holiday("2026-12-22"),
-                        Holiday("2026-12-23"),
-                        Holiday("2026-12-24"),
-                        Holiday("2026-12-25"),
-                        Holiday("2026-12-26"),
-                        Holiday("2026-12-27"),
-                        Holiday("2026-12-28"),
-                        Holiday("2026-12-29"),
-                        Holiday("2026-12-30"),
-                        Holiday("2026-12-31"),
-                        Holiday("2027-01-01"),
-                        Holiday("2027-01-02"),
-                        Holiday("2027-01-03"),
-                        Holiday("2027-01-04"),
-                        Holiday("2027-01-05"),
-                        Holiday("2027-01-06"),
-                        Holiday("2027-01-07"),
-                        Holiday("2027-01-08"),
-                        Holiday("2027-02-08"),
-                        Holiday("2027-02-09"),
-                        Holiday("2027-03-19"),
-                        Holiday("2027-03-25"),
-                        Holiday("2027-03-26"),
-                        Holiday("2027-03-27"),
-                        Holiday("2027-03-28"),
-                        Holiday("2027-03-29"),
-                        Holiday("2027-03-30"),
-                        Holiday("2027-03-31"),
-                        Holiday("2027-04-01"),
-                        Holiday("2027-04-02"),
+                        Holiday("2026-10-12"), Holiday("2026-10-21"), Holiday("2026-10-30"),
+                        Holiday("2026-11-02"), Holiday("2026-11-30"), Holiday("2026-12-03"),
+                        Holiday("2026-12-04"), Holiday("2026-12-07"), Holiday("2026-12-08"),
+                        Holiday("2026-12-22"), Holiday("2026-12-23"), Holiday("2026-12-24"),
+                        Holiday("2026-12-25"), Holiday("2026-12-26"), Holiday("2026-12-27"),
+                        Holiday("2026-12-28"), Holiday("2026-12-29"), Holiday("2026-12-30"),
+                        Holiday("2026-12-31"), Holiday("2027-01-01"), Holiday("2027-01-02"),
+                        Holiday("2027-01-03"), Holiday("2027-01-04"), Holiday("2027-01-05"),
+                        Holiday("2027-01-06"), Holiday("2027-01-07"), Holiday("2027-01-08"),
+                        Holiday("2027-02-08"), Holiday("2027-02-09"), Holiday("2027-03-19"),
+                        Holiday("2027-03-25"), Holiday("2027-03-26"), Holiday("2027-03-27"),
+                        Holiday("2027-03-28"), Holiday("2027-03-29"), Holiday("2027-03-30"),
+                        Holiday("2027-03-31"), Holiday("2027-04-01"), Holiday("2027-04-02"),
                         Holiday("2027-04-30")
                     )
                     defaultHolidays.forEach { repository.insertHoliday(it) }
@@ -120,9 +88,9 @@ class BasketViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            selectedTeamYear.collect { year: Int ->
+            selectedTeamYear.collect { year ->
                 if (year != 0) {
-                    repository.getAllAttendancesByTeam(year).collect { list: List<Attendance> ->
+                    repository.getAllAttendancesByTeam(year).collect { list ->
                         _currentTeamAttendances.value = list
                     }
                 }
@@ -143,8 +111,6 @@ class BasketViewModel @Inject constructor(
     }
 
     // --- OPERACIONES CON EQUIPOS ---
-
-    // Nueva función para añadir un equipo sin exigir horarios ni jugadores al inicio
     fun addTeam(name: String, shortName: String, gender: String, categoryYear: String, colorHex: String, trackMatches: Boolean) {
         viewModelScope.launch {
             val newId = if (_teams.value.isEmpty()) 1 else _teams.value.maxOf { it.year } + 1
@@ -162,7 +128,6 @@ class BasketViewModel @Inject constructor(
         }
     }
 
-    // Actualizada para incorporar shortName y gender
     fun updateTeamData(teamId: Int, newName: String, shortName: String, gender: String, newCategoryYear: String, newColorHex: String, trackMatches: Boolean) {
         viewModelScope.launch {
             val existingTeam = _teams.value.find { it.year == teamId }
@@ -184,8 +149,6 @@ class BasketViewModel @Inject constructor(
     fun deleteTeamCascade(team: Team) {
         viewModelScope.launch {
             val teamYear = team.year
-
-            // Borrado en cascada manual
             val players = repository.getPlayers(teamYear).first()
             players.forEach { repository.deletePlayer(it) }
 
@@ -206,7 +169,7 @@ class BasketViewModel @Inject constructor(
         }
     }
 
-    // --- OPERACIONES CON JUGADORAS ---
+    // --- OPERACIONES CON JUGADORES ---
     fun addPlayer(name: String, lastName: String, dorsal: String?, teamYear: Int) {
         val player = Player(name = name, lastName = lastName, teamYear = teamYear, dorsal = dorsal)
         viewModelScope.launch { repository.addPlayer(player) }
@@ -266,7 +229,11 @@ class BasketViewModel @Inject constructor(
     }
 
     fun addOrUpdateSchedule(newSchedule: TrainingSchedule, onSuccess: () -> Unit, onError: (String) -> Unit) {
-        val daySchedules = _schedules.value.filter { it.dayOfWeek == newSchedule.dayOfWeek && it.id != newSchedule.id }
+        val daySchedules = _schedules.value.filter {
+            it.teamYear == newSchedule.teamYear &&
+                    it.dayOfWeek == newSchedule.dayOfWeek &&
+                    it.id != newSchedule.id
+        }
 
         val newStart = parseTime(newSchedule.startTime)
         val newEnd = parseTime(newSchedule.endTime)
@@ -281,7 +248,7 @@ class BasketViewModel @Inject constructor(
             val existEnd = parseTime(schedule.endTime)
 
             if (maxOf(newStart, existStart) < minOf(newEnd, existEnd)) {
-                onError("Se solapa con el equipo ${schedule.teamYear} (${schedule.startTime}-${schedule.endTime})")
+                onError("El horario se solapa con otro entrenamiento de este mismo equipo (${schedule.startTime}-${schedule.endTime})")
                 return
             }
         }
@@ -312,15 +279,11 @@ class BasketViewModel @Inject constructor(
     }
 
     // --- OPERACIONES CON PARTIDOS ---
-    fun addOrUpdateMatch(match: Match, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
+    fun addOrUpdateMatch(match: Match) {
         val existing = _matches.value.find { it.date == match.date && it.teamYear == match.teamYear && it.id != match.id }
-        if (existing != null) {
-            onError("Este equipo ya tiene un partido programado para este día.")
-            return
-        }
+        if (existing != null) { return }
         viewModelScope.launch {
             repository.insertMatch(match)
-            onSuccess()
         }
     }
 
