@@ -29,6 +29,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.entrenamientos.ui.BasketViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     var activeTab by remember { mutableStateOf("EQUIPOS") }
@@ -256,7 +261,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                                 "F" -> "Femenino"
                                 else -> "Mixto"
                             }
-                            val subtitle = if (team.categoryYear.isNotBlank()) "Año: ${team.categoryYear} ($genderStr)" else genderStr
+                            val subtitle = "Categoría: ${team.categoryYear} $genderStr"
 
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -271,7 +276,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                                         Box(modifier = Modifier.size(16.dp).clip(CircleShape).background(teamColor))
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column {
-                                            Text(text = "${team.shortName} - ${team.name}", style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(text = team.name, style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             Text(text = subtitle, style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(12)), color = Color.Gray, maxLines = 1)
                                         }
                                     }
@@ -521,6 +526,15 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
         val isEdit = teamToEdit != null
         var eName by remember { mutableStateOf(teamToEdit?.name ?: "") }
         var eShortName by remember { mutableStateOf(teamToEdit?.shortName ?: "") }
+
+        val categories = listOf(
+            "Pre-Benjamin 3x3", "Benjamin 3x3", "Benjamin 5x5",
+            "PreMinibasket", "Minibasket", "Preinfantil",
+            "Infantil", "Cadete", "Junior", "Senior"
+        )
+        var eCategory by remember { mutableStateOf(teamToEdit?.categoryYear?.takeIf { it.isNotBlank() } ?: categories.first()) }
+        var expandedCategory by remember { mutableStateOf(false) }
+
         var eGender by remember { mutableStateOf(teamToEdit?.gender ?: "M") }
         var eColor by remember { mutableStateOf(teamToEdit?.colorHex ?: "#2196F3") }
         var eTrackMatches by remember { mutableStateOf(teamToEdit?.trackMatches ?: true) }
@@ -537,13 +551,41 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     OutlinedTextField(value = eName, onValueChange = { eName = it }, label = { Text("Nombre completo del equipo") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     Spacer(Modifier.height(8.dp))
 
+                    // Selector de categoría desplegable debajo del nombre y encima de la abreviatura
+                    ExposedDropdownMenuBox(
+                        expanded = expandedCategory,
+                        onExpandedChange = { expandedCategory = !expandedCategory },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            value = eCategory,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Categoría") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expandedCategory,
+                            onDismissRequest = { expandedCategory = false }
+                        ) {
+                            categories.forEach { category ->
+                                DropdownMenuItem(
+                                    text = { Text(category) },
+                                    onClick = {
+                                        eCategory = category
+                                        expandedCategory = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = eShortName,
-                        onValueChange = { input ->
-                            // Ya no filtramos por .isLetterOrDigit(), permitimos cualquier caracter,
-                            // y mantenemos mayúsculas/minúsculas según las escriba el usuario.
-                            eShortName = input.take(6)
-                        },
+                        onValueChange = { input -> eShortName = input.take(6) },
                         label = { Text("Abreviatura (Máx 6 caract)") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
@@ -596,9 +638,9 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                             android.widget.Toast.makeText(context, "El nombre y la abreviatura son obligatorios", android.widget.Toast.LENGTH_SHORT).show()
                         } else {
                             if (isEdit) {
-                                viewModel.updateTeamData(teamToEdit!!.year, eName, eShortName, eGender, "", eColor, eTrackMatches)
+                                viewModel.updateTeamData(teamToEdit!!.year, eName, eShortName, eGender, eCategory, eColor, eTrackMatches)
                             } else {
-                                viewModel.addTeam(eName, eShortName, eGender, "", eColor, eTrackMatches)
+                                viewModel.addTeam(eName, eShortName, eGender, eCategory, eColor, eTrackMatches)
                             }
                             showTeamDialog = false
                             teamToEdit = null
@@ -800,7 +842,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
         AlertDialog(
             onDismissRequest = { playerToDelete = null },
             title = { Text("Eliminar Jugador/a", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
-            text = { Text("¿Estás seguro de que quieres eliminar a este/a jugador/a?", textAlign = TextAlign.Center) },
+            text = { Text("¿Estás seguro de que quieres eliminar este/a jugador/a?", textAlign = TextAlign.Center) },
             confirmButton = {},
             dismissButton = {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

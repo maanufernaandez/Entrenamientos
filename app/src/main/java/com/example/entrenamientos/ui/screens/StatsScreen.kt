@@ -2,35 +2,14 @@ package com.example.entrenamientos.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.entrenamientos.data.Player
 import com.example.entrenamientos.ui.BasketViewModel
 
 @Composable
@@ -45,7 +25,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
     val teamsList by viewModel.teams.collectAsState()
     val selectedTeam by viewModel.selectedTeamYear.collectAsState()
 
-    androidx.compose.runtime.LaunchedEffect(teamsList) {
+    LaunchedEffect(teamsList) {
         if (teamsList.isNotEmpty() && teamsList.none { it.year == selectedTeam }) {
             viewModel.setSelectedTeamYear(teamsList.first().year)
         }
@@ -61,15 +41,16 @@ fun StatsScreen(viewModel: BasketViewModel) {
     val teamMatches = allMatches.filter { it.teamYear == selectedTeam }
     val players by viewModel.getPlayersForTeam(selectedTeam).collectAsState(initial = emptyList())
 
-    val expandedAttendanceMonths = remember { androidx.compose.runtime.mutableStateMapOf<java.time.YearMonth, Boolean>() }
-    val expandedMatchMonths = remember { androidx.compose.runtime.mutableStateMapOf<java.time.YearMonth, Boolean>() }
-    val expandedMatchDetails = remember { androidx.compose.runtime.mutableStateMapOf<Long, Boolean>() }
-    var isSeasonAttendanceExpanded by remember { androidx.compose.runtime.mutableStateOf(false) }
-    var isSeasonMatchesExpanded by remember { androidx.compose.runtime.mutableStateOf(false) }
-    val expandedWeekDetails = remember { androidx.compose.runtime.mutableStateMapOf<java.time.LocalDate, Boolean>() }
+    val expandedAttendanceMonths = remember { mutableStateMapOf<java.time.YearMonth, Boolean>() }
+    val expandedMatchMonths = remember { mutableStateMapOf<java.time.YearMonth, Boolean>() }
+    val expandedMatchDetails = remember { mutableStateMapOf<Long, Boolean>() }
+    var isSeasonAttendanceExpanded by remember { mutableStateOf(false) }
+    var isSeasonStatsExpanded by remember { mutableStateOf(false) }
+    var isSeasonMatchesExpanded by remember { mutableStateOf(false) }
+    val expandedWeekDetails = remember { mutableStateMapOf<java.time.LocalDate, Boolean>() }
 
     data class PlayerAttendanceCount(
-        val player: com.example.entrenamientos.data.Player,
+        val player: Player,
         val present: Int,
         val justified: Int,
         val unjustified: Int
@@ -185,7 +166,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                             }
                                         }
                                         if (index < sortedPlayersByAttendance.size - 1) {
-                                            HorizontalDivider(color = Color.Black.copy(alpha = 0.15f), thickness = 0.5.dp)
+                                            HorizontalDivider(color = Color.Black.copy(alpha = 0.2f), thickness = 1.dp)
                                         }
                                     }
                                 }
@@ -332,7 +313,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                                     }
                                                 }
                                                 if (index < sortedPlayersByWeekAttendance.size - 1) {
-                                                    HorizontalDivider(color = Color.Black.copy(alpha = 0.15f), thickness = 0.5.dp)
+                                                    HorizontalDivider(color = Color.Black.copy(alpha = 0.2f), thickness = 1.dp)
                                                 }
                                             }
                                         }
@@ -352,91 +333,116 @@ fun StatsScreen(viewModel: BasketViewModel) {
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                val playedMatches = teamMatches.filter { it.resultLocal != null && it.resultVisitor != null }
+                item {
+                    val activeColor = activeTeamObj?.colorHex?.let {
+                        try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
+                    } ?: Color.Black
 
-                if (playedMatches.isEmpty()) {
-                    item { Text("No existen datos de ningún partido", color = Color.Gray) }
-                } else {
-                    var totalWins = 0
-                    var totalLosses = 0
-                    var localWins = 0
-                    var localLosses = 0
-                    var visitorWins = 0
-                    var visitorLosses = 0
-                    var totalScored = 0
-                    var totalReceived = 0
-                    var totalFtMade = 0
-                    var totalFtAttempted = 0
-
-                    playedMatches.forEach { m ->
-                        val localScore = m.resultLocal ?: 0
-                        val visitorScore = m.resultVisitor ?: 0
-
-                        if (m.isLocal) {
-                            totalScored += localScore
-                            totalReceived += visitorScore
-                            if (localScore > visitorScore) {
-                                totalWins++; localWins++
-                            } else if (localScore < visitorScore) {
-                                totalLosses++; localLosses++
-                            }
-                        } else {
-                            totalScored += visitorScore
-                            totalReceived += localScore
-                            if (visitorScore > localScore) {
-                                totalWins++; visitorWins++
-                            } else if (visitorScore < localScore) {
-                                totalLosses++; visitorLosses++
-                            }
-                        }
-                        totalFtMade += m.ftMade
-                        totalFtAttempted += m.ftAttempted
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { isSeasonStatsExpanded = !isSeasonStatsExpanded }
+                            .padding(vertical = 4.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("TEMPORADA", style = MaterialTheme.typography.titleMedium, color = activeColor)
+                        Icon(
+                            imageVector = if (isSeasonStatsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Expandir/Colapsar",
+                            tint = Color.Gray
+                        )
                     }
+                }
 
-                    val avgScored = if (playedMatches.isNotEmpty()) totalScored.toFloat() / playedMatches.size else 0f
-                    val avgReceived = if (playedMatches.isNotEmpty()) totalReceived.toFloat() / playedMatches.size else 0f
-                    val ftPercentage = if (totalFtAttempted > 0) (totalFtMade.toFloat() / totalFtAttempted) * 100 else 0f
+                if (isSeasonStatsExpanded) {
+                    val playedMatches = teamMatches.filter { it.resultLocal != null && it.resultVisitor != null }
 
-                    val fmtScored = String.format(java.util.Locale.US, "%.1f", avgScored).removeSuffix(".0")
-                    val fmtReceived = String.format(java.util.Locale.US, "%.1f", avgReceived).removeSuffix(".0")
-                    val fmtFt = String.format(java.util.Locale.US, "%.1f", ftPercentage).removeSuffix(".0")
+                    if (playedMatches.isEmpty()) {
+                        item { Text("No existen datos de ningún partido", color = Color.Gray, modifier = Modifier.padding(horizontal = 8.dp)) }
+                    } else {
+                        var totalWins = 0
+                        var totalLosses = 0
+                        var localWins = 0
+                        var localLosses = 0
+                        var visitorWins = 0
+                        var visitorLosses = 0
+                        var totalScored = 0
+                        var totalReceived = 0
+                        var totalFtMade = 0
+                        var totalFtAttempted = 0
 
-                    item {
-                        val activeColor = activeTeamObj?.colorHex?.let {
-                            try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
-                        } ?: Color.Black
+                        playedMatches.forEach { m ->
+                            val localScore = m.resultLocal ?: 0
+                            val visitorScore = m.resultVisitor ?: 0
 
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = activeColor.copy(alpha = 0.15f))
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                            if (m.isLocal) {
+                                totalScored += localScore
+                                totalReceived += visitorScore
+                                if (localScore > visitorScore) {
+                                    totalWins++; localWins++
+                                } else if (localScore < visitorScore) {
+                                    totalLosses++; localLosses++
+                                }
+                            } else {
+                                totalScored += visitorScore
+                                totalReceived += localScore
+                                if (visitorScore > localScore) {
+                                    totalWins++; visitorWins++
+                                } else if (visitorScore < localScore) {
+                                    totalLosses++; visitorLosses++
+                                }
+                            }
+                            totalFtMade += m.ftMade
+                            totalFtAttempted += m.ftAttempted
+                        }
 
-                                val statRows = listOf(
-                                    "Resultados:" to "$totalWins / $totalLosses",
-                                    "Resultados (Local):" to "$localWins / $localLosses",
-                                    "Resultados (Visitante):" to "$visitorWins / $visitorLosses",
-                                    "PF / Partido:" to fmtScored,
-                                    "PC / Partido:" to fmtReceived,
-                                    "TL (%):" to "$fmtFt ($totalFtMade/$totalFtAttempted)"
-                                )
+                        val avgScored = if (playedMatches.isNotEmpty()) totalScored.toFloat() / playedMatches.size else 0f
+                        val avgReceived = if (playedMatches.isNotEmpty()) totalReceived.toFloat() / playedMatches.size else 0f
+                        val ftPercentage = if (totalFtAttempted > 0) (totalFtMade.toFloat() / totalFtAttempted) * 100 else 0f
 
-                                statRows.forEach { (label, value) ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = label,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Text(
-                                            text = value,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.width(115.dp),
-                                            textAlign = TextAlign.Start
-                                        )
+                        val fmtScored = String.format(java.util.Locale.US, "%.1f", avgScored).removeSuffix(".0")
+                        val fmtReceived = String.format(java.util.Locale.US, "%.1f", avgReceived).removeSuffix(".0")
+                        val fmtFt = String.format(java.util.Locale.US, "%.1f", ftPercentage).removeSuffix(".0")
+
+                        item {
+                            val activeColor = activeTeamObj?.colorHex?.let {
+                                try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
+                            } ?: Color.Black
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(containerColor = activeColor.copy(alpha = 0.15f))
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+
+                                    val statRows = listOf(
+                                        "Resultados:" to "$totalWins / $totalLosses",
+                                        "Resultados (Local):" to "$localWins / $localLosses",
+                                        "Resultados (Visitante):" to "$visitorWins / $visitorLosses",
+                                        "PF / Partido:" to fmtScored,
+                                        "PC / Partido:" to fmtReceived,
+                                        "TL (%):" to "$fmtFt ($totalFtMade/$totalFtAttempted)"
+                                    )
+
+                                    statRows.forEach { (label, value) ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text(
+                                                text = value,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.width(95.dp),
+                                                textAlign = TextAlign.Start
+                                            )
+                                        }
                                     }
                                 }
                             }
