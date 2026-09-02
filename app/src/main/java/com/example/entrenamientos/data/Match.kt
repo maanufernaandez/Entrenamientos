@@ -18,5 +18,6 @@ data class Match(
     val resultVisitor: Int? = null,
     val ftMade: Int = 0,
     val ftAttempted: Int = 0,
-    val teamYear: Int
+    val teamYear: Int,
+    val observations: String = ""
 )

@@ -279,11 +279,15 @@ class BasketViewModel @Inject constructor(
     }
 
     // --- OPERACIONES CON PARTIDOS ---
-    fun addOrUpdateMatch(match: Match) {
+    fun addOrUpdateMatch(match: Match, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
         val existing = _matches.value.find { it.date == match.date && it.teamYear == match.teamYear && it.id != match.id }
-        if (existing != null) { return }
+        if (existing != null) {
+            onError("Este equipo ya tiene un partido programado para este día.")
+            return
+        }
         viewModelScope.launch {
             repository.insertMatch(match)
+            onSuccess()
         }
     }
 
