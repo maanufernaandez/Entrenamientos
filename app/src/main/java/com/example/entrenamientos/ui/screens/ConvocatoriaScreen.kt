@@ -27,75 +27,181 @@ import com.example.entrenamientos.ui.BasketViewModel
 
 @SuppressLint("MutableCollectionMutableState")
 @Composable
-fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController) {
+fun ConvocatoriaScreen(
+    viewModel: BasketViewModel,
+    navController: NavController
+) {
     val selectedDateStr by viewModel.selectedDate.collectAsState()
     val teamYear by viewModel.selectedTeamYear.collectAsState()
-    val date = java.time.LocalDate.parse(selectedDateStr)
+
+    val date = java.time.LocalDate.parse(
+        selectedDateStr
+    )
 
     val allMatches by viewModel.matches.collectAsState()
-    val match = allMatches.find { it.date == selectedDateStr && it.teamYear == teamYear } ?: return
+
+    val match =
+        allMatches.find {
+            it.date == selectedDateStr &&
+                    it.teamYear == teamYear
+        } ?: return
 
     val teamsList by viewModel.teams.collectAsState()
-    val matchTeam = teamsList.find { it.year == match.teamYear }
-    val isFemale = matchTeam?.gender == "F"
-    val category = matchTeam?.categoryYear ?: ""
 
-    val isSeniorCategory = category.startsWith("Cadete") || category.startsWith("Junior") || category.startsWith("Senior")
-    val isInfantil = category.startsWith("Infantil") || category.startsWith("Preinfantil")
-    val isMini = category.startsWith("Minibasket") || category.startsWith("PreMinibasket") || category.startsWith("Benjamin 5x5")
-    val is3x3 = category.startsWith("Benjamin 3x3") || category.startsWith("Pre-Benjamin 3x3")
+    val matchTeam =
+        teamsList.find {
+            it.year == match.teamYear
+        }
 
-    val minPlayers = when {
-        is3x3 -> 4
-        isSeniorCategory -> 5
-        else -> 8
-    }
+    val isFemale =
+        matchTeam?.gender == "F"
 
-    val absoluteMinPlayers = if (isInfantil) 5 else minPlayers
+    val category =
+        matchTeam?.categoryYear ?: ""
 
-    val maxPlayers = when {
-        isMini -> 15
-        else -> 12
-    }
+    val isSeniorCategory =
+        category.startsWith("Cadete") ||
+                category.startsWith("Junior") ||
+                category.startsWith("Senior")
 
-    val txtConvocadas = if (isFemale) "CONVOCADAS" else "CONVOCADOS"
-    val txtDesconvocadas = if (isFemale) "DESCONVOCADAS" else "DESCONVOCADOS"
-    val txtSeleccionadas = if (isFemale) "Seleccionadas" else "Seleccionados"
-    val txtJugadoras = if (isFemale) "jugadoras" else "jugadores"
-    val txtConvocado = if (isFemale) "Convocada" else "Convocado"
+    val isInfantil =
+        category.startsWith("Infantil") ||
+                category.startsWith("Preinfantil")
 
-    val players by viewModel.getPlayersForTeam(match.teamYear).collectAsState(initial = emptyList())
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val isMini =
+        category.startsWith("Minibasket") ||
+                category.startsWith("PreMinibasket") ||
+                category.startsWith("Benjamin 5x5")
 
-    val hasDraft = viewModel.draftMatchDate == selectedDateStr && viewModel.draftTeamYear == teamYear
+    val is3x3 =
+        category.startsWith("Benjamin 3x3") ||
+                category.startsWith("Pre-Benjamin 3x3")
 
-    var isEditMode by remember(match) {
-        mutableStateOf(if (hasDraft) viewModel.draftIsEditMode ?: !match.isConvocatoriaSaved else !match.isConvocatoriaSaved)
-    }
+    val minPlayers =
+        when {
+            is3x3 -> 4
+            isSeniorCategory -> 5
+            else -> 8
+        }
 
-    var summonedIds by remember(players, match) {
+    val absoluteMinPlayers =
+        if (isInfantil) 5 else minPlayers
+
+    val maxPlayers =
+        if (isMini) 15 else 12
+
+    val txtConvocadas =
+        if (isFemale) "CONVOCADAS" else "CONVOCADOS"
+
+    val txtDesconvocadas =
+        if (isFemale) "DESCONVOCADAS" else "DESCONVOCADOS"
+
+    val txtSeleccionadas =
+        if (isFemale) "Seleccionadas" else "Seleccionados"
+
+    val txtJugadoras =
+        if (isFemale) "jugadoras" else "jugadores"
+
+    val txtConvocado =
+        if (isFemale) "Convocada" else "Convocado"
+
+    val players by viewModel
+        .getPlayersForTeam(match.teamYear)
+        .collectAsState(initial = emptyList())
+
+    val context =
+        androidx.compose.ui.platform.LocalContext.current
+
+    // ============================================================
+    // BORRADOR
+    // ============================================================
+
+    val hasDraft =
+        !match.isConvocatoriaSaved &&
+                viewModel.draftMatchDate == selectedDateStr &&
+                viewModel.draftTeamYear == teamYear
+
+    var isEditMode by remember(
+        match,
+        hasDraft
+    ) {
         mutableStateOf(
-            if (hasDraft && viewModel.draftSummonedIds != null) viewModel.draftSummonedIds!!
-            else if (match.isConvocatoriaSaved) match.summonedPlayers.toSet()
-            else players.map { it.id }.toSet()
+            when {
+                match.isConvocatoriaSaved ->
+                    false
+
+                hasDraft ->
+                    viewModel.draftIsEditMode ?: true
+
+                else ->
+                    true
+            }
         )
     }
-    var reasonsMap by remember(match) {
+
+    var summonedIds by remember(
+        players,
+        match,
+        hasDraft
+    ) {
         mutableStateOf(
-            if (hasDraft && viewModel.draftReasonsMap != null) viewModel.draftReasonsMap!!.toMutableMap()
-            else match.unsummonedReasons.toMutableMap()
+            when {
+                match.isConvocatoriaSaved ->
+                    match.summonedPlayers.toSet()
+
+                hasDraft &&
+                        viewModel.draftSummonedIds != null ->
+                    viewModel.draftSummonedIds!!
+
+                else ->
+                    players.map { it.id }.toSet()
+            }
         )
     }
 
-    var shouldSaveDraft by remember { mutableStateOf(true) }
-    var showMinPlayersWarning by remember { mutableStateOf(false) }
+    var reasonsMap by remember(
+        match,
+        hasDraft
+    ) {
+        mutableStateOf(
+            when {
+                match.isConvocatoriaSaved ->
+                    match.unsummonedReasons.toMutableMap()
 
-    val currentSummonedIds = androidx.compose.runtime.rememberUpdatedState(summonedIds)
-    val currentReasonsMap = androidx.compose.runtime.rememberUpdatedState(reasonsMap)
-    val currentIsEditMode = androidx.compose.runtime.rememberUpdatedState(isEditMode)
+                hasDraft &&
+                        viewModel.draftReasonsMap != null ->
+                    viewModel.draftReasonsMap!!
+                        .toMutableMap()
 
-    androidx.compose.runtime.DisposableEffect(selectedDateStr, teamYear) {
+                else ->
+                    mutableMapOf()
+            }
+        )
+    }
+
+    var shouldSaveDraft by remember {
+        mutableStateOf(true)
+    }
+
+    var showMinPlayersWarning by remember {
+        mutableStateOf(false)
+    }
+
+    val currentSummonedIds =
+        rememberUpdatedState(summonedIds)
+
+    val currentReasonsMap =
+        rememberUpdatedState(reasonsMap)
+
+    val currentIsEditMode =
+        rememberUpdatedState(isEditMode)
+
+    DisposableEffect(
+        selectedDateStr,
+        teamYear
+    ) {
         onDispose {
+
             if (shouldSaveDraft) {
                 viewModel.saveDraftConvocatoria(
                     selectedDateStr,
@@ -110,121 +216,337 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
         }
     }
 
+    // ============================================================
+    // GUARDAR CONVOCATORIA
+    // ============================================================
+
+    val saveMatchAction = {
+        shouldSaveDraft = false
+
+        val convocatoriaChanged =
+            !match.isConvocatoriaSaved ||
+                    match.summonedPlayers.toSet() != summonedIds ||
+                    match.unsummonedReasons != reasonsMap
+
+        // Si cambia la convocatoria, los quintetos anteriores
+        // dejan de ser válidos.
+        if (convocatoriaChanged) {
+            viewModel.saveTrainingNote(
+                selectedDateStr,
+                match.teamYear,
+                "QUINTETOS",
+                "",
+                null
+            )
+        }
+
+        val updatedMatch =
+            match.copy(
+                isConvocatoriaSaved = true,
+                summonedPlayers = summonedIds.toList(),
+                unsummonedReasons = reasonsMap.toMap()
+            )
+
+        viewModel.addOrUpdateMatch(
+            match = updatedMatch,
+
+            onSuccess = {
+                // SOLO AQUÍ consideramos oficialmente guardada
+                // la convocatoria.
+
+                viewModel.clearDraftConvocatoria()
+
+                isEditMode = false
+            },
+
+            onError = { errorMessage ->
+
+                // Firebase ha rechazado el guardado.
+                // No mostramos la convocatoria como oficial.
+
+                shouldSaveDraft = true
+
+                android.widget.Toast.makeText(
+                    context,
+                    errorMessage,
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        )
+    }
+
+    // ============================================================
+    // RESTO
+    // ============================================================
+
+    var playerToUnsummon by remember {
+        mutableStateOf<com.example.entrenamientos.data.Player?>(
+            null
+        )
+    }
+
+    val reasonOptions =
+        listOf(
+            "Rotación",
+            "Lesión",
+            "Falta a entrenamientos",
+            "Castigada",
+            "No puede ir"
+        )
+
+    val playerSortComparator =
+        compareBy<com.example.entrenamientos.data.Player> {
+            it.dorsal.isNullOrBlank()
+        }.thenBy {
+            it.dorsal?.toIntOrNull() ?: 999
+        }
+
+    val sortedPlayers =
+        players.sortedWith(
+            playerSortComparator
+        )
+
+    val dayOfWeek =
+        date.dayOfWeek.getDisplayName(
+            java.time.format.TextStyle.FULL,
+            java.util.Locale("es", "ES")
+        ).replaceFirstChar {
+            it.uppercase()
+        }
+
+    val monthName =
+        date.month.getDisplayName(
+            java.time.format.TextStyle.FULL,
+            java.util.Locale("es", "ES")
+        ).replaceFirstChar {
+            it.uppercase()
+        }
+
+    val matchDateFormatted =
+        "$dayOfWeek ${date.dayOfMonth} de $monthName"
+
+    // ============================================================
+    // BACK
+    // ============================================================
+
     androidx.activity.compose.BackHandler {
         shouldSaveDraft = false
         navController.popBackStack()
     }
 
-    val saveMatchAction = {
-        shouldSaveDraft = false
-        val updatedMatch = match.copy(
-            isConvocatoriaSaved = true,
-            summonedPlayers = summonedIds.toList(),
-            unsummonedReasons = reasonsMap.toMap()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+
+        Text(
+            text =
+            if (isEditMode) {
+                if (match.isConvocatoriaSaved) {
+                    "Editar Convocatoria"
+                } else {
+                    "Crear Convocatoria"
+                }
+            } else {
+                "Convocatoria Oficial"
+            },
+            style = MaterialTheme.typography.headlineMedium
         )
-        viewModel.addOrUpdateMatch(updatedMatch)
-        isEditMode = false
-    }
 
-    var playerToUnsummon by remember { mutableStateOf<com.example.entrenamientos.data.Player?>(null) }
-    val reasonOptions = listOf("Rotación", "Lesión", "Falta a entrenamientos", "Castigada", "No puede ir")
+        Text(
+            text =
+            "vs ${match.opponent} - $matchDateFormatted",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.Gray
+        )
 
-    val playerSortComparator = compareBy<com.example.entrenamientos.data.Player> { it.dorsal.isNullOrBlank() }
-        .thenBy { it.dorsal?.toIntOrNull() ?: 999 }
+        Spacer(
+            modifier = Modifier.height(16.dp)
+        )
 
-    val sortedPlayers = players.sortedWith(playerSortComparator)
-
-    val dayOfWeek = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
-    val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
-    val matchDateFormatted = "$dayOfWeek ${date.dayOfMonth} de $monthName"
-
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(if (isEditMode) {
-            if (match.isConvocatoriaSaved) "Editar Convocatoria" else "Crear Convocatoria"
-        } else "Convocatoria Oficial", style = MaterialTheme.typography.headlineMedium)
-
-        Text("vs ${match.opponent} - $matchDateFormatted", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-        Spacer(modifier = Modifier.height(16.dp))
+        // ========================================================
+        // RESUMEN
+        // ========================================================
 
         if (!isEditMode) {
-            if (isInfantil && match.summonedPlayers.size in 5..7) {
+
+            if (
+                isInfantil &&
+                match.summonedPlayers.size in 5..7
+            ) {
                 Text(
                     text = "¡AVISO! No dispones del número mínimo de $txtJugadoras para cumplir con la normativa.",
                     color = com.example.entrenamientos.ui.theme.AttendanceRed,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
                 )
             }
 
-            val convocadas = sortedPlayers.filter { match.summonedPlayers.contains(it.id) }
-            val desconvocadas = sortedPlayers.filter { !match.summonedPlayers.contains(it.id) }
-            val listStateRead = rememberLazyListState()
+            val convocadas =
+                sortedPlayers.filter {
+                    match.summonedPlayers.contains(it.id)
+                }
+
+            val desconvocadas =
+                sortedPlayers.filter {
+                    !match.summonedPlayers.contains(it.id)
+                }
+
+            val listStateRead =
+                rememberLazyListState()
 
             LazyColumn(
                 state = listStateRead,
-                modifier = Modifier.weight(1f).verticalScrollShadow(listStateRead)
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScrollShadow(
+                        listStateRead
+                    )
             ) {
+
                 item {
-                    Text("- $txtConvocadas (${convocadas.size}/$maxPlayers)", style = MaterialTheme.typography.titleMedium, color = com.example.entrenamientos.ui.theme.SuccessGreen)
-                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text =
+                        "- $txtConvocadas (${convocadas.size}/$maxPlayers)",
+                        style =
+                        MaterialTheme.typography.titleMedium,
+                        color =
+                        com.example.entrenamientos.ui.theme.SuccessGreen
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
                 }
-                items(convocadas) { p ->
-                    val dDisplay = p.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
-                    val baseName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
+
+                items(convocadas) { player ->
+
+                    val dDisplay =
+                        player.dorsal
+                            ?.takeIf { it.isNotBlank() }
+                            ?: "s.n."
+
+                    val baseName =
+                        if (player.lastName.isNotBlank()) {
+                            "${player.name} ${player.lastName}"
+                        } else {
+                            player.name
+                        }
 
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                bottom = 6.dp
+                            ),
+                        verticalAlignment =
+                        Alignment.CenterVertically
                     ) {
+
                         Text(
                             text = dDisplay,
-                            style = MaterialTheme.typography.bodyLarge,
+                            style =
+                            MaterialTheme.typography.bodyLarge,
                             fontSize = 19.sp,
-                            modifier = Modifier.width(42.dp),
-                            textAlign = TextAlign.Center
+                            modifier =
+                            Modifier.width(42.dp),
+                            textAlign =
+                            TextAlign.Center
                         )
+
                         Text(
                             text = "-",
-                            style = MaterialTheme.typography.bodyLarge,
+                            style =
+                            MaterialTheme.typography.bodyLarge,
                             fontSize = 19.sp,
-                            modifier = Modifier.width(24.dp),
-                            textAlign = TextAlign.Center
+                            modifier =
+                            Modifier.width(24.dp),
+                            textAlign =
+                            TextAlign.Center
                         )
+
                         Text(
                             text = baseName,
-                            style = MaterialTheme.typography.bodyLarge,
+                            style =
+                            MaterialTheme.typography.bodyLarge,
                             fontSize = 19.sp,
-                            modifier = Modifier.weight(1f),
-                            textAlign = TextAlign.Start
+                            modifier =
+                            Modifier.weight(1f),
+                            textAlign =
+                            TextAlign.Start
                         )
                     }
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("- $txtDesconvocadas (${desconvocadas.size})", style = MaterialTheme.typography.titleMedium, color = com.example.entrenamientos.ui.theme.AttendanceRed)
-                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Spacer(
+                        modifier = Modifier.height(16.dp)
+                    )
+
+                    Text(
+                        text =
+                        "- $txtDesconvocadas (${desconvocadas.size})",
+                        style =
+                        MaterialTheme.typography.titleMedium,
+                        color =
+                        com.example.entrenamientos.ui.theme.AttendanceRed
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
                 }
-                items(desconvocadas) { p ->
-                    val baseName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
+
+                items(desconvocadas) { player ->
+
+                    val baseName =
+                        if (player.lastName.isNotBlank()) {
+                            "${player.name} ${player.lastName}"
+                        } else {
+                            player.name
+                        }
 
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, bottom = 8.dp, end = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = 16.dp,
+                                bottom = 8.dp,
+                                end = 16.dp
+                            ),
+                        horizontalArrangement =
+                        Arrangement.SpaceBetween,
+                        verticalAlignment =
+                        Alignment.CenterVertically
                     ) {
+
                         Text(
                             text = "• $baseName",
-                            style = MaterialTheme.typography.bodyLarge,
+                            style =
+                            MaterialTheme.typography.bodyLarge,
                             fontSize = 19.sp,
-                            fontWeight = FontWeight.Normal,
-                            modifier = Modifier.weight(1f)
+                            modifier =
+                            Modifier.weight(1f)
                         )
+
                         Text(
-                            text = match.unsummonedReasons[p.id.toString()]?.takeIf { it.isNotBlank() } ?: "Sin motivo",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text =
+                            match.unsummonedReasons[
+                                player.id.toString()
+                            ]?.takeIf {
+                                it.isNotBlank()
+                            } ?: "Sin motivo",
+                            style =
+                            MaterialTheme.typography.bodyMedium,
                             fontSize = 16.sp,
                             color = Color.DarkGray
                         )
@@ -232,233 +554,586 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(
+                modifier = Modifier.height(16.dp)
+            )
 
-            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement =
+                Arrangement.spacedBy(8.dp)
+            ) {
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement =
+                    Arrangement.spacedBy(8.dp)
+                ) {
+
                     Button(
                         onClick = {
                             shouldSaveDraft = false
                             navController.popBackStack()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Volver", color = Color.White) }
+                        colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = Color.DarkGray
+                        ),
+                        modifier =
+                        Modifier.weight(1f)
+                    ) {
+                        Text(
+                            "Volver",
+                            color = Color.White
+                        )
+                    }
 
                     Button(
-                        onClick = { isEditMode = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Editar", color = Color.Black) }
+                        onClick = {
+                            shouldSaveDraft = true
+                            isEditMode = true
+                        },
+                        colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor =
+                            com.example.entrenamientos.ui.theme.AttendanceGreen
+                        ),
+                        modifier =
+                        Modifier.weight(1f)
+                    ) {
+                        Text(
+                            "Editar",
+                            color = Color.Black
+                        )
+                    }
                 }
 
                 Button(
                     onClick = {
+
                         shouldSaveDraft = false
+
                         summonedIds = emptySet()
-                        reasonsMap = mutableMapOf()
-                        val resetMatch = match.copy(isConvocatoriaSaved = false, summonedPlayers = emptyList(), unsummonedReasons = emptyMap())
-                        viewModel.addOrUpdateMatch(resetMatch)
-                        isEditMode = true
+                        reasonsMap =
+                            mutableMapOf()
+
+                        viewModel.saveTrainingNote(
+                            selectedDateStr,
+                            match.teamYear,
+                            "QUINTETOS",
+                            "",
+                            null
+                        )
+
+                        val resetMatch =
+                            match.copy(
+                                isConvocatoriaSaved = false,
+                                summonedPlayers = emptyList(),
+                                unsummonedReasons = emptyMap()
+                            )
+
+                        viewModel.addOrUpdateMatch(
+                            match = resetMatch,
+                            onSuccess = {
+                                viewModel.clearDraftConvocatoria()
+                                shouldSaveDraft = true
+                                isEditMode = true
+                            },
+                            onError = {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    it,
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        )
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Eliminar", color = Color.White) }
+                    colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor =
+                        com.example.entrenamientos.ui.theme.AttendanceRed
+                    ),
+                    modifier =
+                    Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        "Eliminar",
+                        color = Color.White
+                    )
+                }
             }
 
         } else {
-            Text("$txtSeleccionadas: ${summonedIds.size} (Mín. $minPlayers - Máx. $maxPlayers)", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
 
-            val listStateEdit = rememberLazyListState()
+            Text(
+                text =
+                "$txtSeleccionadas: ${summonedIds.size} (Mín. $minPlayers - Máx. $maxPlayers)",
+                style =
+                MaterialTheme.typography.titleMedium
+            )
+
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
+
+            val listStateEdit =
+                rememberLazyListState()
 
             LazyColumn(
                 state = listStateEdit,
-                modifier = Modifier.weight(1f).verticalScrollShadow(listStateEdit)
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScrollShadow(
+                        listStateEdit
+                    )
             ) {
+
                 items(sortedPlayers) { player ->
-                    val isSummoned = summonedIds.contains(player.id)
-                    val containerColor = if (isSummoned) com.example.entrenamientos.ui.theme.SuccessGreen else com.example.entrenamientos.ui.theme.AttendanceRed
+
+                    val isSummoned =
+                        summonedIds.contains(player.id)
+
+                    val containerColor =
+                        if (isSummoned) {
+                            com.example.entrenamientos.ui.theme.SuccessGreen
+                        } else {
+                            com.example.entrenamientos.ui.theme.AttendanceRed
+                        }
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
                             .clip(MaterialTheme.shapes.small)
-                            .background(containerColor.copy(alpha = 0.2f))
+                            .background(
+                                containerColor.copy(alpha = 0.2f)
+                            )
                             .clickable {
+
                                 if (isSummoned) {
-                                    playerToUnsummon = player
+                                    playerToUnsummon =
+                                        player
                                 } else {
-                                    summonedIds = summonedIds + player.id
-                                    reasonsMap.remove(player.id.toString())
+                                    summonedIds =
+                                        summonedIds + player.id
+
+                                    reasonsMap.remove(
+                                        player.id.toString()
+                                    )
                                 }
                             }
                             .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalAlignment =
+                        Alignment.CenterVertically,
+                        horizontalArrangement =
+                        Arrangement.SpaceBetween
                     ) {
-                        val dDisplay = player.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
-                        val baseName = if (player.lastName.isNotBlank()) "${player.name} ${player.lastName}" else player.name
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        val dDisplay =
+                            player.dorsal
+                                ?.takeIf {
+                                    it.isNotBlank()
+                                }
+                                ?: "s.n."
+
+                        val baseName =
+                            if (player.lastName.isNotBlank()) {
+                                "${player.name} ${player.lastName}"
+                            } else {
+                                player.name
+                            }
+
+                        Row(
+                            verticalAlignment =
+                            Alignment.CenterVertically
+                        ) {
+
                             Text(
                                 text = dDisplay,
-                                style = MaterialTheme.typography.bodyLarge,
+                                style =
+                                MaterialTheme.typography.bodyLarge,
                                 fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = containerColor,
-                                modifier = Modifier.width(36.dp),
-                                textAlign = TextAlign.Center
+                                fontWeight =
+                                FontWeight.Bold,
+                                color =
+                                containerColor,
+                                modifier =
+                                Modifier.width(36.dp),
+                                textAlign =
+                                TextAlign.Center
                             )
+
                             Text(
                                 text = " · ",
-                                style = MaterialTheme.typography.bodyLarge,
+                                style =
+                                MaterialTheme.typography.bodyLarge,
                                 fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = containerColor
+                                fontWeight =
+                                FontWeight.Bold,
+                                color =
+                                containerColor
                             )
+
                             Text(
                                 text = baseName,
-                                style = MaterialTheme.typography.bodyLarge,
+                                style =
+                                MaterialTheme.typography.bodyLarge,
                                 fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = containerColor
+                                fontWeight =
+                                FontWeight.Bold,
+                                color =
+                                containerColor
                             )
                         }
 
                         if (isSummoned) {
-                            Text(txtConvocado, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = containerColor)
+                            Text(
+                                txtConvocado,
+                                style =
+                                MaterialTheme.typography.bodyMedium,
+                                fontWeight =
+                                FontWeight.Bold,
+                                color =
+                                containerColor
+                            )
                         } else {
-                            Text(reasonsMap[player.id.toString()] ?: "", style = MaterialTheme.typography.bodyMedium, color = containerColor, fontWeight = FontWeight.Bold)
+                            Text(
+                                reasonsMap[
+                                    player.id.toString()
+                                ] ?: "",
+                                style =
+                                MaterialTheme.typography.bodyMedium,
+                                color =
+                                containerColor,
+                                fontWeight =
+                                FontWeight.Bold
+                            )
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(
+                modifier = Modifier.height(16.dp)
+            )
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement =
+                Arrangement.spacedBy(8.dp)
+            ) {
+
                 Button(
                     onClick = {
+
                         if (match.isConvocatoriaSaved) {
+
                             isEditMode = false
-                            summonedIds = match.summonedPlayers.toSet()
-                            reasonsMap = match.unsummonedReasons.toMutableMap()
+
+                            summonedIds =
+                                match.summonedPlayers.toSet()
+
+                            reasonsMap =
+                                match.unsummonedReasons
+                                    .toMutableMap()
+
                         } else {
+
                             shouldSaveDraft = false
                             navController.popBackStack()
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
-                ) { Text("Cancelar", color = Color.White) }
+                    colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor =
+                        com.example.entrenamientos.ui.theme.AttendanceRed
+                    )
+                ) {
+                    Text(
+                        "Cancelar",
+                        color = Color.White
+                    )
+                }
 
                 Button(
                     onClick = {
-                        if (summonedIds.size > maxPlayers) {
-                            android.widget.Toast.makeText(context, "Máximo $maxPlayers $txtJugadoras en esta categoría", android.widget.Toast.LENGTH_LONG).show()
-                        } else if (summonedIds.size < absoluteMinPlayers) {
-                            android.widget.Toast.makeText(context, "Debes convocar mínimo $absoluteMinPlayers $txtJugadoras", android.widget.Toast.LENGTH_LONG).show()
-                        } else if (isInfantil && summonedIds.size in 5..7) {
-                            showMinPlayersWarning = true
-                        } else if (summonedIds.size < minPlayers) {
-                            android.widget.Toast.makeText(context, "Debes convocar mínimo $minPlayers $txtJugadoras", android.widget.Toast.LENGTH_LONG).show()
-                        } else {
-                            saveMatchAction()
+
+                        when {
+
+                            summonedIds.size > maxPlayers -> {
+
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Máximo $maxPlayers $txtJugadoras en esta categoría",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            }
+
+                            summonedIds.size < absoluteMinPlayers -> {
+
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Debes convocar mínimo $absoluteMinPlayers $txtJugadoras",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            }
+
+                            isInfantil &&
+                                    summonedIds.size in 5..7 -> {
+
+                                showMinPlayersWarning = true
+                            }
+
+                            summonedIds.size < minPlayers -> {
+
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Debes convocar mínimo $minPlayers $txtJugadoras",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            }
+
+                            else -> {
+                                saveMatchAction()
+                            }
                         }
+
                     },
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                ) { Text("Guardar", color = Color.Black) }
+                    colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor =
+                        com.example.entrenamientos.ui.theme.AttendanceGreen
+                    )
+                ) {
+                    Text(
+                        "Guardar",
+                        color = Color.Black
+                    )
+                }
             }
         }
     }
 
+    // ============================================================
+    // AVISO INFANTIL
+    // ============================================================
+
     if (showMinPlayersWarning) {
+
         AlertDialog(
-            onDismissRequest = { showMinPlayersWarning = false },
+            onDismissRequest = {
+                showMinPlayersWarning = false
+            },
+
             title = {
                 Text(
                     "Aviso de Normativa",
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold
+                    modifier =
+                    Modifier.fillMaxWidth(),
+                    textAlign =
+                    TextAlign.Center,
+                    fontWeight =
+                    FontWeight.Bold
                 )
             },
+
             text = {
                 Text(
                     "No tienes el número mínimo de $txtJugadoras para cumplir con la normativa (Mínimo 8). ¿Deseas guardar la convocatoria de todos modos?",
-                    textAlign = TextAlign.Justify
+                    textAlign =
+                    TextAlign.Justify
                 )
             },
+
             confirmButton = {},
+
             dismissButton = {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { showMinPlayersWarning = false },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
-                    ) { Text("Revisar", color = Color.White) }
+
+                Row(
+                    modifier =
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement =
+                    Arrangement.spacedBy(8.dp)
+                ) {
 
                     Button(
                         onClick = {
                             showMinPlayersWarning = false
-                            saveMatchAction()
                         },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
-                    ) { Text("Continuar", color = Color.White) }
+                        modifier =
+                        Modifier.weight(1f),
+                        colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor =
+                            com.example.entrenamientos.ui.theme.AttendanceRed
+                        )
+                    ) {
+                        Text(
+                            "Revisar",
+                            color = Color.White
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+
+                            showMinPlayersWarning = false
+                            saveMatchAction()
+
+                        },
+                        modifier =
+                        Modifier.weight(1f),
+                        colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor =
+                            Color(0xFFFF9800)
+                        )
+                    ) {
+                        Text(
+                            "Continuar",
+                            color = Color.White
+                        )
+                    }
                 }
             }
         )
     }
 
-    if (playerToUnsummon != null) {
-        AlertDialog(
-            onDismissRequest = { playerToUnsummon = null },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-            modifier = Modifier.fillMaxWidth(0.95f).padding(16.dp),
-            title = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Motivo de desconvocatoria:", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val dDisplay = playerToUnsummon?.dorsal?.takeIf { it.isNotBlank() } ?: "s.n."
-                    val baseName = if (playerToUnsummon?.lastName?.isNotBlank() == true) "${playerToUnsummon?.name} ${playerToUnsummon?.lastName}" else playerToUnsummon?.name ?: ""
+    // ============================================================
+    // MOTIVO DESCONVOCATORIA
+    // ============================================================
 
-                    Row(modifier = Modifier.align(Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+    if (playerToUnsummon != null) {
+
+        AlertDialog(
+            onDismissRequest = {
+                playerToUnsummon = null
+            },
+
+            properties =
+            androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false
+            ),
+
+            modifier =
+            Modifier
+                .fillMaxWidth(0.95f)
+                .padding(16.dp),
+
+            title = {
+
+                Column(
+                    modifier =
+                    Modifier.fillMaxWidth()
+                ) {
+
+                    Text(
+                        "Motivo de desconvocatoria:",
+                        style =
+                        MaterialTheme.typography.titleMedium
+                    )
+
+                    Spacer(
+                        modifier =
+                        Modifier.height(8.dp)
+                    )
+
+                    val dDisplay =
+                        playerToUnsummon?.dorsal
+                            ?.takeIf {
+                                it.isNotBlank()
+                            }
+                            ?: "s.n."
+
+                    val baseName =
+                        if (
+                            playerToUnsummon?.lastName
+                                ?.isNotBlank() == true
+                        ) {
+                            "${playerToUnsummon?.name} ${playerToUnsummon?.lastName}"
+                        } else {
+                            playerToUnsummon?.name ?: ""
+                        }
+
+                    Row(
+                        modifier =
+                        Modifier.align(
+                            Alignment.CenterHorizontally
+                        ),
+                        verticalAlignment =
+                        Alignment.CenterVertically
+                    ) {
+
                         Text(
                             text = dDisplay,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.width(42.dp),
-                            textAlign = TextAlign.Center
+                            style =
+                            MaterialTheme.typography.headlineSmall,
+                            fontWeight =
+                            FontWeight.Bold,
+                            modifier =
+                            Modifier.width(42.dp),
+                            textAlign =
+                            TextAlign.Center
                         )
+
                         Text(
                             text = " · ",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
+                            style =
+                            MaterialTheme.typography.headlineSmall,
+                            fontWeight =
+                            FontWeight.Bold
                         )
+
                         Text(
                             text = baseName,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
+                            style =
+                            MaterialTheme.typography.headlineSmall,
+                            fontWeight =
+                            FontWeight.Bold
                         )
                     }
                 }
             },
+
             text = {
+
                 Column {
+
                     reasonOptions.forEach { reason ->
+
                         Button(
                             onClick = {
-                                reasonsMap = reasonsMap.toMutableMap().apply { put(playerToUnsummon!!.id.toString(), reason) }
-                                summonedIds = summonedIds - playerToUnsummon!!.id
-                                playerToUnsummon = null
+
+                                reasonsMap =
+                                    reasonsMap.toMutableMap().apply {
+                                        put(
+                                            playerToUnsummon!!.id.toString(),
+                                            reason
+                                        )
+                                    }
+
+                                summonedIds =
+                                    summonedIds -
+                                            playerToUnsummon!!.id
+
+                                playerToUnsummon =
+                                    null
                             },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+
+                            modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+
+                            colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor =
+                                com.example.entrenamientos.ui.theme.AttendanceRed
+                            )
                         ) {
+
                             Text(
                                 text = reason,
                                 color = Color.White,
@@ -469,39 +1144,86 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                     }
                 }
             },
+
             confirmButton = {},
+
             dismissButton = {
-                TextButton(onClick = { playerToUnsummon = null }) { Text("Cancelar", color = Color.Gray) }
+                TextButton(
+                    onClick = {
+                        playerToUnsummon = null
+                    }
+                ) {
+                    Text(
+                        "Cancelar",
+                        color = Color.Gray
+                    )
+                }
             }
         )
     }
 }
 
-fun Modifier.verticalScrollShadow(listState: LazyListState) = this.drawWithContent {
+fun Modifier.verticalScrollShadow(
+    listState: LazyListState
+) = this.drawWithContent {
+
     drawContent()
-    val showTop = listState.canScrollBackward
-    val showBottom = listState.canScrollForward
-    val shadowHeight = 16.dp.toPx()
+
+    val showTop =
+        listState.canScrollBackward
+
+    val showBottom =
+        listState.canScrollForward
+
+    val shadowHeight =
+        16.dp.toPx()
 
     if (showTop) {
+
         drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(Color.Black.copy(alpha = 0.15f), Color.Transparent),
+            brush =
+            Brush.verticalGradient(
+                colors =
+                listOf(
+                    Color.Black.copy(alpha = 0.15f),
+                    Color.Transparent
+                ),
                 startY = 0f,
                 endY = shadowHeight
             ),
-            size = Size(size.width, shadowHeight)
+            size =
+            Size(
+                size.width,
+                shadowHeight
+            )
         )
     }
+
     if (showBottom) {
+
         drawRect(
-            brush = Brush.verticalGradient(
-                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.15f)),
-                startY = size.height - shadowHeight,
-                endY = size.height
+            brush =
+            Brush.verticalGradient(
+                colors =
+                listOf(
+                    Color.Transparent,
+                    Color.Black.copy(alpha = 0.15f)
+                ),
+                startY =
+                size.height - shadowHeight,
+                endY =
+                size.height
             ),
-            topLeft = Offset(0f, size.height - shadowHeight),
-            size = Size(size.width, shadowHeight)
+            topLeft =
+            Offset(
+                0f,
+                size.height - shadowHeight
+            ),
+            size =
+            Size(
+                size.width,
+                shadowHeight
+            )
         )
     }
 }
