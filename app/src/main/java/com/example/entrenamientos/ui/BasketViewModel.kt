@@ -334,6 +334,10 @@ class BasketViewModel @Inject constructor(
         insertHoliday(Holiday(date))
     }
 
+    fun removeHoliday(holiday: Holiday) {
+        userDoc.collection("holidays").document(holiday.date).delete()
+    }
+
     // --- VALIDACIÓN DE CONVOCATORIA ---
     fun canMakeConvocatoria(matchDate: java.time.LocalDate, teamYear: Int, attendances: List<Attendance>): Pair<Boolean, String?> {
         val seasonStartYear = if (matchDate.monthValue >= 9) matchDate.year else matchDate.year - 1
@@ -357,10 +361,10 @@ class BasketViewModel @Inject constructor(
     var draftMatchDate: String? = null
     var draftTeamYear: Int? = null
     var draftSummonedIds: Set<Long>? = null
-    var draftReasonsMap: Map<Long, String>? = null
+    var draftReasonsMap: Map<String, String>? = null // <--- Corregido a Map<String, String>
     var draftIsEditMode: Boolean? = null
 
-    fun saveDraftConvocatoria(date: String, teamYear: Int, summoned: Set<Long>, reasons: Map<Long, String>, isEdit: Boolean) {
+    fun saveDraftConvocatoria(date: String, teamYear: Int, summoned: Set<Long>, reasons: Map<String, String>, isEdit: Boolean) { // <--- Corregido a Map<String, String>
         draftMatchDate = date; draftTeamYear = teamYear; draftSummonedIds = summoned; draftReasonsMap = reasons; draftIsEditMode = isEdit
     }
 

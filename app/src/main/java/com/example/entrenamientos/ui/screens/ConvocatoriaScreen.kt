@@ -223,7 +223,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                             modifier = Modifier.weight(1f)
                         )
                         Text(
-                            text = match.unsummonedReasons[p.id]?.takeIf { it.isNotBlank() } ?: "Sin motivo",
+                            text = match.unsummonedReasons[p.id.toString()]?.takeIf { it.isNotBlank() } ?: "Sin motivo",
                             style = MaterialTheme.typography.bodyMedium,
                             fontSize = 16.sp,
                             color = Color.DarkGray
@@ -267,7 +267,6 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
             }
 
         } else {
-            // Aquí siempre muestra minPlayers (ej: 8), no absoluteMinPlayers (5)
             Text("$txtSeleccionadas: ${summonedIds.size} (Mín. $minPlayers - Máx. $maxPlayers)", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -292,7 +291,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                                     playerToUnsummon = player
                                 } else {
                                     summonedIds = summonedIds + player.id
-                                    reasonsMap.remove(player.id)
+                                    reasonsMap.remove(player.id.toString())
                                 }
                             }
                             .padding(16.dp),
@@ -331,7 +330,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                         if (isSummoned) {
                             Text(txtConvocado, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = containerColor)
                         } else {
-                            Text(reasonsMap[player.id] ?: "", style = MaterialTheme.typography.bodyMedium, color = containerColor, fontWeight = FontWeight.Bold)
+                            Text(reasonsMap[player.id.toString()] ?: "", style = MaterialTheme.typography.bodyMedium, color = containerColor, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -453,7 +452,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                     reasonOptions.forEach { reason ->
                         Button(
                             onClick = {
-                                reasonsMap = reasonsMap.toMutableMap().apply { put(playerToUnsummon!!.id, reason) }
+                                reasonsMap = reasonsMap.toMutableMap().apply { put(playerToUnsummon!!.id.toString(), reason) }
                                 summonedIds = summonedIds - playerToUnsummon!!.id
                                 playerToUnsummon = null
                             },

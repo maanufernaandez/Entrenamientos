@@ -10,7 +10,10 @@ data class Match(
     val teamYear: Int = 0,
     val isConvocatoriaSaved: Boolean = false,
     val summonedPlayers: List<Long> = emptyList(),
-    val unsummonedReasons: Map<Long, String> = emptyMap(),
+    val unsummonedReasons: Map<String, String> = emptyMap(),
     val resultLocal: Int? = null,
-    val resultVisitor: Int? = null
+    val resultVisitor: Int? = null,
+    val ftMade: Int = 0,
+    val ftAttempted: Int = 0,
+    val observations: String? = null
 )

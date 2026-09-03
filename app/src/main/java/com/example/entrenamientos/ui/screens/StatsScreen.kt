@@ -477,7 +477,8 @@ fun StatsScreen(viewModel: BasketViewModel) {
                     val unsummonedStats: Map<Long, Map<String, Int>> = run {
                         val stats = mutableMapOf<Long, MutableMap<String, Int>>()
                         matchesWithConvocatoria.forEach { match ->
-                            match.unsummonedReasons.forEach { (playerId, reason) ->
+                            match.unsummonedReasons.forEach { (playerIdStr, reason) ->
+                                val playerId = playerIdStr.toLongOrNull() ?: 0L
                                 val playerStats = stats.getOrPut(playerId) { mutableMapOf() }
                                 playerStats[reason] = playerStats.getOrDefault(reason, 0) + 1
                             }
@@ -558,7 +559,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                                 Text("Convocatoria no guardada todavía.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                                             } else {
                                                 val convocadas = players.filter { match.summonedPlayers.contains(it.id) }
-                                                val desconvocadas = players.filter { match.unsummonedReasons.containsKey(it.id) }
+                                                val desconvocadas = players.filter { match.unsummonedReasons.containsKey(it.id.toString()) } // <--- Corregido a .toString()
 
                                                 Text("- Convocadas (${convocadas.size})", style = MaterialTheme.typography.titleSmall, color = com.example.entrenamientos.ui.theme.SuccessGreen, fontWeight = FontWeight.Bold)
                                                 Spacer(modifier = Modifier.height(4.dp))
@@ -574,7 +575,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                                     val displayName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
                                                     Column(modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)) {
                                                         Text(displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                                        Text("Motivo: ${match.unsummonedReasons[p.id]?.takeIf { it.isNotBlank() } ?: "Sin motivo especificado"}", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                                                        Text("Motivo: ${match.unsummonedReasons[p.id.toString()]?.takeIf { it.isNotBlank() } ?: "Sin motivo especificado"}", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray) // <--- Corregido a .toString()
                                                     }
                                                 }
                                             }
