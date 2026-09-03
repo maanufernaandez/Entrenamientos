@@ -1,22 +1,29 @@
 package com.example.entrenamientos.ui
 
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.example.entrenamientos.data.*
+import com.example.entrenamientos.data.Attendance
+import com.example.entrenamientos.data.Holiday
+import com.example.entrenamientos.data.Match
+import com.example.entrenamientos.data.Player
+import com.example.entrenamientos.data.Team
+import com.example.entrenamientos.data.TrainingNote
+import com.example.entrenamientos.data.TrainingSchedule
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlinx.coroutines.flow.first
 
 @HiltViewModel
 class BasketViewModel @Inject constructor(
-    private val repository: AppRepository
+    private val auth: FirebaseAuth,
+    private val db: FirebaseFirestore
 ) : ViewModel() {
+
+    // Obtiene la ruta base del usuario actual
+    private val userDoc get() = db.collection("users").document(auth.currentUser?.uid ?: "anonymous")
 
     // --- ESTADOS ---
     private val _teams = MutableStateFlow<List<Team>>(emptyList())
@@ -31,7 +38,9 @@ class BasketViewModel @Inject constructor(
     private val _holidays = MutableStateFlow<List<Holiday>>(emptyList())
     val holidays: StateFlow<List<Holiday>> = _holidays.asStateFlow()
 
-    private val _currentTeamAttendances = MutableStateFlow<List<Attendance>>(emptyList())
+    private val _players = MutableStateFlow<List<Player>>(emptyList())
+    private val _attendances = MutableStateFlow<List<Attendance>>(emptyList())
+    private val _trainingNotes = MutableStateFlow<List<TrainingNote>>(emptyList())
 
     private val _selectedDate = MutableStateFlow("2026-09-01")
     val selectedDate: StateFlow<String> = _selectedDate.asStateFlow()
@@ -40,8 +49,16 @@ class BasketViewModel @Inject constructor(
     val selectedTeamYear: StateFlow<Int> = _selectedTeamYear.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            repository.getAllTeams().collect { list ->
+        setupFirebaseListeners()
+    }
+
+    private fun setupFirebaseListeners() {
+        if (auth.currentUser?.uid == null) return
+
+        // Escuchar Equipos
+        userDoc.collection("teams").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) {
+                val list = snapshot.toObjects(Team::class.java)
                 _teams.value = list
                 if (list.isNotEmpty() && _selectedTeamYear.value == 0) {
                     _selectedTeamYear.value = list.first().year
@@ -49,156 +66,160 @@ class BasketViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
-            repository.getAllSchedules().collect { list ->
-                _schedules.value = list
-            }
+        // Escuchar Horarios
+        userDoc.collection("schedules").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) _schedules.value = snapshot.toObjects(TrainingSchedule::class.java)
         }
 
-        viewModelScope.launch {
-            repository.getAllMatches().collect { list ->
-                _matches.value = list
-            }
+        // Escuchar Partidos
+        userDoc.collection("matches").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) _matches.value = snapshot.toObjects(Match::class.java)
         }
 
-        viewModelScope.launch {
-            repository.getAllHolidays().collect { list ->
+        // Escuchar Festivos
+        userDoc.collection("holidays").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) {
+                val list = snapshot.toObjects(Holiday::class.java)
                 if (list.isEmpty()) {
-                    val defaultHolidays = listOf(
-                        Holiday("2026-10-12"), Holiday("2026-10-21"), Holiday("2026-10-30"),
-                        Holiday("2026-11-02"), Holiday("2026-11-30"), Holiday("2026-12-03"),
-                        Holiday("2026-12-04"), Holiday("2026-12-07"), Holiday("2026-12-08"),
-                        Holiday("2026-12-22"), Holiday("2026-12-23"), Holiday("2026-12-24"),
-                        Holiday("2026-12-25"), Holiday("2026-12-26"), Holiday("2026-12-27"),
-                        Holiday("2026-12-28"), Holiday("2026-12-29"), Holiday("2026-12-30"),
-                        Holiday("2026-12-31"), Holiday("2027-01-01"), Holiday("2027-01-02"),
-                        Holiday("2027-01-03"), Holiday("2027-01-04"), Holiday("2027-01-05"),
-                        Holiday("2027-01-06"), Holiday("2027-01-07"), Holiday("2027-01-08"),
-                        Holiday("2027-02-08"), Holiday("2027-02-09"), Holiday("2027-03-19"),
-                        Holiday("2027-03-25"), Holiday("2027-03-26"), Holiday("2027-03-27"),
-                        Holiday("2027-03-28"), Holiday("2027-03-29"), Holiday("2027-03-30"),
-                        Holiday("2027-03-31"), Holiday("2027-04-01"), Holiday("2027-04-02"),
-                        Holiday("2027-04-30")
-                    )
-                    defaultHolidays.forEach { repository.insertHoliday(it) }
+                    createDefaultHolidays()
                 } else {
                     _holidays.value = list
                 }
             }
         }
 
-        viewModelScope.launch {
-            selectedTeamYear.collect { year ->
-                if (year != 0) {
-                    repository.getAllAttendancesByTeam(year).collect { list ->
-                        _currentTeamAttendances.value = list
-                    }
-                }
-            }
+        // Escuchar Jugadores
+        userDoc.collection("players").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) _players.value = snapshot.toObjects(Player::class.java)
+        }
+
+        // Escuchar Asistencias
+        userDoc.collection("attendances").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) _attendances.value = snapshot.toObjects(Attendance::class.java)
+        }
+
+        // Escuchar Notas de Entrenamiento
+        userDoc.collection("training_notes").addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) _trainingNotes.value = snapshot.toObjects(TrainingNote::class.java)
         }
     }
 
-    fun setSelectedDate(date: String) {
-        _selectedDate.value = date
+    private fun createDefaultHolidays() {
+        val defaultHolidays = listOf(
+            Holiday("2026-10-12"), Holiday("2026-10-21"), Holiday("2026-10-30"),
+            Holiday("2026-11-02"), Holiday("2026-11-30"), Holiday("2026-12-03"),
+            Holiday("2026-12-04"), Holiday("2026-12-07"), Holiday("2026-12-08"),
+            Holiday("2026-12-22"), Holiday("2026-12-23"), Holiday("2026-12-24"),
+            Holiday("2026-12-25"), Holiday("2026-12-26"), Holiday("2026-12-27"),
+            Holiday("2026-12-28"), Holiday("2026-12-29"), Holiday("2026-12-30"),
+            Holiday("2026-12-31"), Holiday("2027-01-01"), Holiday("2027-01-02"),
+            Holiday("2027-01-03"), Holiday("2027-01-04"), Holiday("2027-01-05"),
+            Holiday("2027-01-06"), Holiday("2027-01-07"), Holiday("2027-01-08"),
+            Holiday("2027-02-08"), Holiday("2027-02-09"), Holiday("2027-03-19"),
+            Holiday("2027-03-25"), Holiday("2027-03-26"), Holiday("2027-03-27"),
+            Holiday("2027-03-28"), Holiday("2027-03-29"), Holiday("2027-03-30"),
+            Holiday("2027-03-31"), Holiday("2027-04-01"), Holiday("2027-04-02"),
+            Holiday("2027-04-30")
+        )
+        defaultHolidays.forEach { insertHoliday(it) }
     }
 
-    fun setSelectedTeamYear(year: Int) {
-        _selectedTeamYear.value = year
-    }
+    fun setSelectedDate(date: String) { _selectedDate.value = date }
+    fun setSelectedTeamYear(year: Int) { _selectedTeamYear.value = year }
 
-    fun getNextAttendanceStatus(currentStatus: Int): Int {
-        return (currentStatus + 1) % 3
-    }
+    fun getNextAttendanceStatus(currentStatus: Int): Int = (currentStatus + 1) % 3
 
     // --- OPERACIONES CON EQUIPOS ---
     fun addTeam(name: String, shortName: String, gender: String, categoryYear: String, colorHex: String, trackMatches: Boolean) {
-        viewModelScope.launch {
-            val newId = if (_teams.value.isEmpty()) 1 else _teams.value.maxOf { it.year } + 1
-            val newTeam = Team(
-                year = newId,
-                name = name,
-                shortName = shortName,
-                gender = gender,
-                categoryYear = categoryYear,
-                colorHex = colorHex,
-                trackMatches = trackMatches
-            )
-            repository.insertTeam(newTeam)
-            _selectedTeamYear.value = newId
-        }
+        val newId = if (_teams.value.isEmpty()) 1 else _teams.value.maxOf { it.year } + 1
+        val newTeam = Team(
+            year = newId, name = name, shortName = shortName, gender = gender,
+            categoryYear = categoryYear, colorHex = colorHex, trackMatches = trackMatches
+        )
+        userDoc.collection("teams").document(newId.toString()).set(newTeam)
+        _selectedTeamYear.value = newId
     }
 
     fun updateTeamData(teamId: Int, newName: String, shortName: String, gender: String, newCategoryYear: String, newColorHex: String, trackMatches: Boolean) {
-        viewModelScope.launch {
-            val existingTeam = _teams.value.find { it.year == teamId }
-            val firstTrainingDate = existingTeam?.firstTrainingDate ?: "2026-09-01"
+        val existingTeam = _teams.value.find { it.year == teamId }
+        val firstTrainingDate = existingTeam?.firstTrainingDate ?: "2026-09-01"
 
-            repository.insertTeam(Team(
-                year = teamId,
-                name = newName,
-                shortName = shortName,
-                gender = gender,
-                categoryYear = newCategoryYear,
-                colorHex = newColorHex,
-                firstTrainingDate = firstTrainingDate,
-                trackMatches = trackMatches
-            ))
-        }
+        val updatedTeam = Team(
+            year = teamId, name = newName, shortName = shortName, gender = gender,
+            categoryYear = newCategoryYear, colorHex = newColorHex,
+            firstTrainingDate = firstTrainingDate, trackMatches = trackMatches
+        )
+        userDoc.collection("teams").document(teamId.toString()).set(updatedTeam)
     }
 
     fun deleteTeamCascade(team: Team) {
-        viewModelScope.launch {
-            val teamYear = team.year
-            val players = repository.getPlayers(teamYear).first()
-            players.forEach { repository.deletePlayer(it) }
+        val teamYear = team.year
+        val batch = db.batch()
 
-            val scheds = repository.getAllSchedules().first().filter { it.teamYear == teamYear }
-            scheds.forEach { repository.deleteSchedule(it) }
+        batch.delete(userDoc.collection("teams").document(teamYear.toString()))
 
-            val matches = repository.getAllMatches().first().filter { it.teamYear == teamYear }
-            matches.forEach { repository.deleteMatch(it) }
+        _players.value.filter { it.teamYear == teamYear }.forEach { p ->
+            batch.delete(userDoc.collection("players").document(p.id.toString()))
+        }
 
-            repository.deleteTeam(team)
+        _schedules.value.filter { it.teamYear == teamYear }.forEach { s ->
+            batch.delete(userDoc.collection("schedules").document(s.id.toString()))
+        }
 
-            val remainingTeams = repository.getAllTeams().first()
-            if (remainingTeams.isNotEmpty()) {
-                _selectedTeamYear.value = remainingTeams.first().year
-            } else {
-                _selectedTeamYear.value = 0
-            }
+        _matches.value.filter { it.teamYear == teamYear }.forEach { m ->
+            batch.delete(userDoc.collection("matches").document(m.id.toString()))
+        }
+
+        _attendances.value.filter { it.teamYear == teamYear }.forEach { a ->
+            batch.delete(userDoc.collection("attendances").document("${a.date}_${a.playerId}"))
+        }
+        _trainingNotes.value.filter { it.teamYear == teamYear }.forEach { n ->
+            batch.delete(userDoc.collection("training_notes").document("${n.date}_${n.teamYear}_${n.noteType}"))
+        }
+
+        batch.commit().addOnSuccessListener {
+            val remaining = _teams.value.filter { it.year != teamYear }
+            _selectedTeamYear.value = remaining.firstOrNull()?.year ?: 0
         }
     }
 
     // --- OPERACIONES CON JUGADORES ---
     fun addPlayer(name: String, lastName: String, dorsal: String?, teamYear: Int) {
-        val player = Player(name = name, lastName = lastName, teamYear = teamYear, dorsal = dorsal)
-        viewModelScope.launch { repository.addPlayer(player) }
+        val newId = System.currentTimeMillis()
+        val player = Player(id = newId, name = name, lastName = lastName, teamYear = teamYear, dorsal = dorsal)
+        userDoc.collection("players").document(newId.toString()).set(player)
     }
 
     fun updatePlayer(player: Player) {
-        viewModelScope.launch { repository.updatePlayer(player) }
+        userDoc.collection("players").document(player.id.toString()).set(player)
     }
 
     fun deletePlayer(player: Player) {
-        viewModelScope.launch { repository.deletePlayer(player) }
+        userDoc.collection("players").document(player.id.toString()).delete()
     }
 
     fun getPlayersForTeam(year: Int): kotlinx.coroutines.flow.Flow<List<Player>> {
-        return repository.getPlayers(year)
+        return kotlinx.coroutines.flow.flow {
+            _players.collect { allPlayers ->
+                emit(allPlayers.filter { it.teamYear == year })
+            }
+        }
     }
 
     // --- OPERACIONES CON NOTAS Y QUINTETOS ---
     fun saveTrainingNote(date: String, teamYear: Int, type: String, content: String, existingNote: TrainingNote? = null) {
-        viewModelScope.launch {
-            val noteToSave = existingNote?.copy(content = content)
-                ?: TrainingNote(date = date, teamYear = teamYear, noteType = type, content = content)
-            repository.saveTrainingNote(noteToSave)
-        }
+        val noteToSave = existingNote?.copy(content = content)
+            ?: TrainingNote(date = date, teamYear = teamYear, noteType = type, content = content)
+
+        val docId = "${date}_${teamYear}_${type}"
+        userDoc.collection("training_notes").document(docId).set(noteToSave)
     }
 
     fun getTrainingNoteForDateAndTeam(date: String, year: Int, type: String): kotlinx.coroutines.flow.Flow<TrainingNote?> {
-        return repository.getTrainingNotes(date, year).map { notes ->
-            notes.find { it.noteType == type }
+        return kotlinx.coroutines.flow.flow {
+            _trainingNotes.collect { notes ->
+                emit(notes.find { it.date == date && it.teamYear == year && it.noteType == type })
+            }
         }
     }
 
@@ -216,23 +237,19 @@ class BasketViewModel @Inject constructor(
     }
 
     fun updateTeamFirstTrainingDate(teamId: Int, newDate: String) {
-        viewModelScope.launch {
-            val team = _teams.value.find { it.year == teamId }
-            if (team != null) {
-                repository.insertTeam(team.copy(firstTrainingDate = newDate))
-            }
+        val team = _teams.value.find { it.year == teamId }
+        if (team != null) {
+            userDoc.collection("teams").document(teamId.toString()).set(team.copy(firstTrainingDate = newDate))
         }
     }
 
     fun deleteSchedule(schedule: TrainingSchedule) {
-        viewModelScope.launch { repository.deleteSchedule(schedule) }
+        userDoc.collection("schedules").document(schedule.id.toString()).delete()
     }
 
     fun addOrUpdateSchedule(newSchedule: TrainingSchedule, onSuccess: () -> Unit, onError: (String) -> Unit) {
         val daySchedules = _schedules.value.filter {
-            it.teamYear == newSchedule.teamYear &&
-                    it.dayOfWeek == newSchedule.dayOfWeek &&
-                    it.id != newSchedule.id
+            it.teamYear == newSchedule.teamYear && it.dayOfWeek == newSchedule.dayOfWeek && it.id != newSchedule.id
         }
 
         val newStart = parseTime(newSchedule.startTime)
@@ -248,15 +265,14 @@ class BasketViewModel @Inject constructor(
             val existEnd = parseTime(schedule.endTime)
 
             if (maxOf(newStart, existStart) < minOf(newEnd, existEnd)) {
-                onError("El horario se solapa con otro entrenamiento de este mismo equipo (${schedule.startTime}-${schedule.endTime})")
+                onError("El horario se solapa con otro entrenamiento (${schedule.startTime}-${schedule.endTime})")
                 return
             }
         }
 
-        viewModelScope.launch {
-            repository.insertSchedule(newSchedule)
-            onSuccess()
-        }
+        val scheduleToSave = if (newSchedule.id == 0L) newSchedule.copy(id = System.currentTimeMillis()) else newSchedule
+        userDoc.collection("schedules").document(scheduleToSave.id.toString()).set(scheduleToSave)
+            .addOnSuccessListener { onSuccess() }
     }
 
     private fun parseTime(time: String): Int {
@@ -267,15 +283,28 @@ class BasketViewModel @Inject constructor(
 
     // --- OPERACIONES CON ASISTENCIAS ---
     fun getAttendanceForDateAndTeam(date: String, year: Int): kotlinx.coroutines.flow.Flow<List<Attendance>> {
-        return repository.getAttendance(date, year)
+        return kotlinx.coroutines.flow.flow {
+            _attendances.collect { allAtt ->
+                emit(allAtt.filter { it.date == date && it.teamYear == year })
+            }
+        }
     }
 
     fun saveAttendances(attendances: List<Attendance>) {
-        viewModelScope.launch { repository.saveAttendances(attendances) }
+        val batch = db.batch()
+        attendances.forEach { a ->
+            val docRef = userDoc.collection("attendances").document("${a.date}_${a.playerId}")
+            batch.set(docRef, a)
+        }
+        batch.commit()
     }
 
     fun getAllAttendancesByTeam(year: Int): kotlinx.coroutines.flow.Flow<List<Attendance>> {
-        return repository.getAllAttendancesByTeam(year)
+        return kotlinx.coroutines.flow.flow {
+            _attendances.collect { allAtt ->
+                emit(allAtt.filter { it.teamYear == year })
+            }
+        }
     }
 
     // --- OPERACIONES CON PARTIDOS ---
@@ -285,45 +314,24 @@ class BasketViewModel @Inject constructor(
             onError("Este equipo ya tiene un partido programado para este día.")
             return
         }
-        viewModelScope.launch {
-            repository.insertMatch(match)
-            onSuccess()
-        }
+        val matchToSave = if (match.id == 0L) match.copy(id = System.currentTimeMillis()) else match
+        userDoc.collection("matches").document(matchToSave.id.toString()).set(matchToSave)
+            .addOnSuccessListener { onSuccess() }
     }
 
     fun deleteMatch(match: Match) {
-        viewModelScope.launch { repository.deleteMatch(match) }
-    }
-
-    fun getMatchForDate(date: java.time.LocalDate): Match? = _matches.value.find { it.date == date.toString() }
-
-    fun getMatchColor(match: Match): Color {
-        val team = _teams.value.find { it.year == match.teamYear }
-        val baseColor = team?.colorHex?.let {
-            try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
-        } ?: Color.Gray
-
-        if (match.resultLocal == null || match.resultVisitor == null) {
-            return baseColor
-        }
-
-        if (match.resultLocal == match.resultVisitor) return Color.Gray
-
-        val hasWon = if (match.isLocal) match.resultLocal > match.resultVisitor else match.resultVisitor > match.resultLocal
-        return if (hasWon) Color(0xFF4CAF50) else Color.Red
+        userDoc.collection("matches").document(match.id.toString()).delete()
     }
 
     // --- OPERACIONES CON FESTIVOS ---
-    fun isHoliday(date: java.time.LocalDate): Boolean {
-        return _holidays.value.any { it.date == date.toString() }
+    fun isHoliday(date: java.time.LocalDate): Boolean = _holidays.value.any { it.date == date.toString() }
+
+    private fun insertHoliday(holiday: Holiday) {
+        userDoc.collection("holidays").document(holiday.date).set(holiday)
     }
 
     fun addHoliday(date: String) {
-        viewModelScope.launch { repository.insertHoliday(Holiday(date)) }
-    }
-
-    fun removeHoliday(holiday: Holiday) {
-        viewModelScope.launch { repository.deleteHoliday(holiday) }
+        insertHoliday(Holiday(date))
     }
 
     // --- VALIDACIÓN DE CONVOCATORIA ---
@@ -353,18 +361,10 @@ class BasketViewModel @Inject constructor(
     var draftIsEditMode: Boolean? = null
 
     fun saveDraftConvocatoria(date: String, teamYear: Int, summoned: Set<Long>, reasons: Map<Long, String>, isEdit: Boolean) {
-        draftMatchDate = date
-        draftTeamYear = teamYear
-        draftSummonedIds = summoned
-        draftReasonsMap = reasons
-        draftIsEditMode = isEdit
+        draftMatchDate = date; draftTeamYear = teamYear; draftSummonedIds = summoned; draftReasonsMap = reasons; draftIsEditMode = isEdit
     }
 
     fun clearDraftConvocatoria() {
-        draftMatchDate = null
-        draftTeamYear = null
-        draftSummonedIds = null
-        draftReasonsMap = null
-        draftIsEditMode = null
+        draftMatchDate = null; draftTeamYear = null; draftSummonedIds = null; draftReasonsMap = null; draftIsEditMode = null
     }
 }

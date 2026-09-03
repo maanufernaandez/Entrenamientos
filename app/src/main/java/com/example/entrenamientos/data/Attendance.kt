@@ -1,13 +1,9 @@
 package com.example.entrenamientos.data
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
-
-@Entity(tableName = "attendances")
 data class Attendance(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val date: String, // Formato ISO "YYYY-MM-DD"
-    val playerId: Long,
-    val status: Int, // 0: Verde (Defecto), 1: Amarillo (Justificado), 2: Rojo (Ausente)
-    val teamYear: Int
+    val id: Long = 0L,
+    val date: String = "",
+    val playerId: Long = 0L,
+    val teamYear: Int = 0,
+    val status: Int = 0
 )
