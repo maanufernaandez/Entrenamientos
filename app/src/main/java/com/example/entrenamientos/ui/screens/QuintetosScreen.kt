@@ -5,36 +5,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -107,8 +85,11 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
     val currentQuarter = lineups.size + 1
     val summonedPlayers = players.filter { match.summonedPlayers.contains(it.id) }.sortedWith(playerSortComparator)
 
-    val forcedPlayers = remember(currentQuarter, lineups, summonedPlayers, isInfantil, isMini) {
-        if (isInfantil && currentQuarter == 3 && lineups.size == 2) {
+    // Flag para saber si aplicamos reglas estrictas de Infantil (si van menos de 8, están libres de baneos)
+    val applyInfantilRules = isInfantil && summonedPlayers.size >= 8
+
+    val forcedPlayers = remember(currentQuarter, lineups, summonedPlayers, applyInfantilRules, isMini) {
+        if (applyInfantilRules && currentQuarter == 3 && lineups.size == 2) {
             summonedPlayers.filter { p -> !lineups[0].contains(p.id) && !lineups[1].contains(p.id) }.map { it.id }.toSet()
         } else if (isMini) {
             val forced = mutableSetOf<Long>()
@@ -414,7 +395,7 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
                 Text("$txtSeleccionadas: ${currentSelection.size}/$playersPerQuarter", style = MaterialTheme.typography.bodyMedium, color = counterColor, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (isInfantil && currentQuarter == 3 && forcedPlayers.size > playersPerQuarter) {
+                if (applyInfantilRules && currentQuarter == 3 && forcedPlayers.size > playersPerQuarter) {
                     Text("¡Error de rotación! Has dejado a más de $playersPerQuarter $txtJugadoras sin jugar en los primeros cuartos. No caben en pista. Pulsa 'Empezar de 0'.", color = com.example.entrenamientos.ui.theme.AttendanceRed, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -468,14 +449,14 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
                                     } else false
                                 } else false
                             }
-                            isInfantil -> currentQuarter == 3 && lineups.size >= 2 && lineups[0].contains(player.id) && lineups[1].contains(player.id)
+                            isInfantil && applyInfantilRules -> currentQuarter == 3 && lineups.size >= 2 && lineups[0].contains(player.id) && lineups[1].contains(player.id)
                             else -> false
                         }
 
                         val isWarning = when {
                             is3x3 -> false
                             isMini -> false
-                            isInfantil -> currentQuarter == 2 && lineups.isNotEmpty() && lineups[0].contains(player.id) ||
+                            isInfantil && applyInfantilRules -> currentQuarter == 2 && lineups.isNotEmpty() && lineups[0].contains(player.id) ||
                                     currentQuarter == 3 && summonedPlayers.size > 10 && lineups.isNotEmpty() && (lineups[0].contains(player.id) || (lineups.size > 1 && lineups[1].contains(player.id)))
                             else -> false
                         }
@@ -817,7 +798,6 @@ fun QuintetosScreen(viewModel: BasketViewModel, navController: NavController) {
     }
 }
 
-// Extensión para sombras en Scrolls Horizontales
 fun Modifier.horizontalScrollShadow(scrollState: ScrollState) = this.drawWithContent {
     drawContent()
     val showStart = scrollState.canScrollBackward

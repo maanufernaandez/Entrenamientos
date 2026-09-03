@@ -52,7 +52,7 @@ sealed class Screen(val route: String, val title: String, val icon: androidx.com
 }
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(onLogout: () -> Unit = {}) {
     val navController = rememberNavController()
     val items = listOf(Screen.Calendar, Screen.Stats, Screen.Settings)
 
@@ -67,14 +67,14 @@ fun AppNavigation() {
             val selectedBlue = Color(0xFF2196F3)
             val unselectedLightBlue = Color(0xFFE3F2FD)
 
-            // Contenedor principal en formato columna para colocar las líneas arriba y abajo
+            val calendarSubRoutes = listOf("attendance", "convocatoria", "resultado", "quintetos")
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(unselectedLightBlue)
                     .navigationBarsPadding()
             ) {
-                // --- LÍNEA HORIZONTAL SUPERIOR ---
                 Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.Black))
 
                 Row(
@@ -82,11 +82,18 @@ fun AppNavigation() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     items.forEachIndexed { index, screen ->
-                        val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+
+                        val isExactMatch = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                        val isSubRouteOfCalendar = screen.route == Screen.Calendar.route &&
+                                (currentDestination?.route?.let { r ->
+                                    calendarSubRoutes.contains(r) || r.startsWith("notes/")
+                                } == true)
+
+                        val isSelected = isExactMatch || isSubRouteOfCalendar
 
                         Button(
                             onClick = {
-                                if (!isSelected) {
+                                if (!isExactMatch) {
                                     navController.navigate(screen.route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
                                             saveState = true
@@ -113,7 +120,6 @@ fun AppNavigation() {
                             )
                         }
 
-                        // --- LÍNEAS VERTICALES INTERNAS (Solo entre botones) ---
                         if (index < items.size - 1) {
                             Box(
                                 modifier = Modifier
@@ -125,7 +131,6 @@ fun AppNavigation() {
                     }
                 }
 
-                // --- LÍNEA HORIZONTAL INFERIOR ---
                 Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.Black))
             }
         }
@@ -150,7 +155,8 @@ fun AppNavigation() {
                 StatsScreen(viewModel = sharedViewModel)
             }
             composable(Screen.Settings.route) {
-                SettingsScreen(viewModel = sharedViewModel)
+                // Aquí le pasamos el onLogout a SettingsScreen
+                SettingsScreen(viewModel = sharedViewModel, onLogout = onLogout)
             }
             composable("attendance") {
                 AttendanceScreen(viewModel = sharedViewModel, navController = navController)

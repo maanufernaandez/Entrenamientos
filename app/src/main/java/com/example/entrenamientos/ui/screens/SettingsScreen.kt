@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
@@ -62,7 +63,7 @@ import com.example.entrenamientos.ui.BasketViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
+fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () -> Unit = {}) {
     var activeTab by remember { mutableStateOf("EQUIPOS") }
     val teamsList by viewModel.teams.collectAsState()
     val selectedTeam by viewModel.selectedTeamYear.collectAsState()
@@ -135,14 +136,17 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     var showTeamDialog by remember { mutableStateOf(false) }
     var teamToEdit by remember { mutableStateOf<com.example.entrenamientos.data.Team?>(null) }
 
-    val selectedBlue = Color(0xFF2196F3)
-    val unselectedLightBlue = Color(0xFFE3F2FD)
-
     val currentTeamObj = sortedTeamsList.find { it.year == selectedTeam }
     val trackMatches = currentTeamObj?.trackMatches ?: true
     val isFemale = currentTeamObj?.gender == "F"
     val labelJugadores = if (isFemale) "Jugadoras" else "Jugadores"
     val labelJugador = if (isFemale) "Jugadora" else "Jugador"
+
+    val currentTeamColor = currentTeamObj?.colorHex?.let {
+        try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
+    } ?: Color.Gray
+    val activeTabColor = currentTeamColor
+    val inactiveTabColor = currentTeamColor.copy(alpha = 0.25f)
 
     val jugadorasTitle = "$labelJugadores (${players.size})"
     val dayInitials = mapOf(1 to "L", 2 to "M", 3 to "X", 4 to "J", 5 to "V", 6 to "S", 7 to "D")
@@ -152,7 +156,24 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     val uniformSpacing = 24.dp
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("AJUSTES", style = MaterialTheme.typography.headlineMedium.copy(fontSize = sp(24)))
+
+        // --- AQUÍ ESTÁ EL ENCABEZADO CON EL BOTÓN DE CERRAR SESIÓN ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("AJUSTES", style = MaterialTheme.typography.headlineMedium.copy(fontSize = sp(24)))
+            IconButton(onClick = onLogout) {
+                Icon(
+                    imageVector = Icons.Default.ExitToApp,
+                    contentDescription = "Cerrar sesión",
+                    tint = Color.DarkGray
+                )
+            }
+        }
+        // -----------------------------------------------------------
+
         Spacer(modifier = Modifier.height(16.dp))
 
         if (sortedTeamsList.isEmpty()) {
@@ -203,7 +224,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     onClick = { activeTab = "EQUIPOS" },
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = buttonContentPadding,
-                    colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "EQUIPOS") selectedBlue else unselectedLightBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "EQUIPOS") Color.Black else Color.LightGray)
                 ) { Text("Equipos", color = if (activeTab == "EQUIPOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -213,14 +234,14 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                         onClick = { activeTab = "PLANTILLA" },
                         modifier = Modifier.weight(1f),
                         contentPadding = buttonContentPadding,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "PLANTILLA") selectedBlue else unselectedLightBlue)
+                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "PLANTILLA") activeTabColor else inactiveTabColor)
                     ) { Text(jugadorasTitle, color = if (activeTab == "PLANTILLA") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
 
                     Button(
                         onClick = { activeTab = "HORARIOS" },
                         modifier = Modifier.weight(1f),
                         contentPadding = buttonContentPadding,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "HORARIOS") selectedBlue else unselectedLightBlue)
+                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "HORARIOS") activeTabColor else inactiveTabColor)
                     ) { Text(horariosTitle, color = if (activeTab == "HORARIOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
                 }
 
@@ -234,8 +255,8 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                             contentPadding = buttonContentPadding,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (!trackMatches) Color.LightGray.copy(alpha = 0.5f)
-                                else if (activeTab == "PARTIDOS") selectedBlue
-                                else unselectedLightBlue
+                                else if (activeTab == "PARTIDOS") activeTabColor
+                                else inactiveTabColor
                             )
                         ) { Text("Partidos", color = if (!trackMatches) Color.Gray else if (activeTab == "PARTIDOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
 
@@ -252,7 +273,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                         onClick = { activeTab = "FESTIVOS" },
                         modifier = Modifier.weight(1f),
                         contentPadding = buttonContentPadding,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "FESTIVOS") selectedBlue else unselectedLightBlue)
+                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "FESTIVOS") activeTabColor else inactiveTabColor)
                     ) { Text("Festivos", color = if (activeTab == "FESTIVOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
                 }
             }
@@ -736,21 +757,21 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                         OutlinedTextField(
                             value = playerNameInput,
                             onValueChange = { if (it.length <= 15) playerNameInput = it },
-                            label = { Text("Nombre (*)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            label = { Text("Nombre (*)", fontSize = sp(12), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             singleLine = true,
                             modifier = Modifier.weight(1f).height(64.dp)
                         )
                         OutlinedTextField(
                             value = playerLastNameInput,
                             onValueChange = { if (it.length <= 25) playerLastNameInput = it },
-                            label = { Text("Apellido (*)", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            label = { Text("Apellido (*)", fontSize = sp(12), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             singleLine = true,
                             modifier = Modifier.weight(1.3f).height(64.dp)
                         )
                         OutlinedTextField(
                             value = playerDorsalInput,
                             onValueChange = { if(it.length <= 2 && it.all { char -> char.isDigit() }) playerDorsalInput = it },
-                            label = { Text("Nº", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            label = { Text("Nº", fontSize = sp(12), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             singleLine = true,
                             modifier = Modifier.width(64.dp).height(64.dp),
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)

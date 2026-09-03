@@ -41,6 +41,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
     val category = matchTeam?.categoryYear ?: ""
 
     val isSeniorCategory = category.startsWith("Cadete") || category.startsWith("Junior") || category.startsWith("Senior")
+    val isInfantil = category.startsWith("Infantil") || category.startsWith("Preinfantil")
     val isMini = category.startsWith("Minibasket") || category.startsWith("PreMinibasket") || category.startsWith("Benjamin 5x5")
     val is3x3 = category.startsWith("Benjamin 3x3") || category.startsWith("Pre-Benjamin 3x3")
 
@@ -49,6 +50,8 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
         isSeniorCategory -> 5
         else -> 8
     }
+
+    val absoluteMinPlayers = if (isInfantil) 5 else minPlayers
 
     val maxPlayers = when {
         isMini -> 15
@@ -144,13 +147,14 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
         Spacer(modifier = Modifier.height(16.dp))
 
         if (!isEditMode) {
-            if (minPlayers == 8 && match.summonedPlayers.size in 5..7) {
+            if (isInfantil && match.summonedPlayers.size in 5..7) {
                 Text(
-                    text = "⚠️ No dispones del número mínimo de $txtJugadoras para cumplir con la normativa.",
+                    text = "¡AVISO! No dispones del número mínimo de $txtJugadoras para cumplir con la normativa.",
                     color = com.example.entrenamientos.ui.theme.AttendanceRed,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 )
             }
 
@@ -200,7 +204,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
 
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("- $txtDesconvocadas", style = MaterialTheme.typography.titleMedium, color = com.example.entrenamientos.ui.theme.AttendanceRed)
+                    Text("- $txtDesconvocadas (${desconvocadas.size})", style = MaterialTheme.typography.titleMedium, color = com.example.entrenamientos.ui.theme.AttendanceRed)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 items(desconvocadas) { p ->
@@ -263,6 +267,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
             }
 
         } else {
+            // Aquí siempre muestra minPlayers (ej: 8), no absoluteMinPlayers (5)
             Text("$txtSeleccionadas: ${summonedIds.size} (Mín. $minPlayers - Máx. $maxPlayers)", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -354,12 +359,12 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                     onClick = {
                         if (summonedIds.size > maxPlayers) {
                             android.widget.Toast.makeText(context, "Máximo $maxPlayers $txtJugadoras en esta categoría", android.widget.Toast.LENGTH_LONG).show()
+                        } else if (summonedIds.size < absoluteMinPlayers) {
+                            android.widget.Toast.makeText(context, "Debes convocar mínimo $absoluteMinPlayers $txtJugadoras", android.widget.Toast.LENGTH_LONG).show()
+                        } else if (isInfantil && summonedIds.size in 5..7) {
+                            showMinPlayersWarning = true
                         } else if (summonedIds.size < minPlayers) {
-                            if (minPlayers == 8 && summonedIds.size in 5..7) {
-                                showMinPlayersWarning = true
-                            } else {
-                                android.widget.Toast.makeText(context, "Debes convocar mínimo $minPlayers $txtJugadoras", android.widget.Toast.LENGTH_LONG).show()
-                            }
+                            android.widget.Toast.makeText(context, "Debes convocar mínimo $minPlayers $txtJugadoras", android.widget.Toast.LENGTH_LONG).show()
                         } else {
                             saveMatchAction()
                         }
@@ -374,22 +379,38 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
     if (showMinPlayersWarning) {
         AlertDialog(
             onDismissRequest = { showMinPlayersWarning = false },
-            title = { Text("Aviso de Normativa", fontWeight = FontWeight.Bold) },
-            text = { Text("No tienes el número mínimo de $txtJugadoras para cumplir con la normativa (Mínimo 8). ¿Deseas guardar la convocatoria de todos modos?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showMinPlayersWarning = false
-                        saveMatchAction()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
-                ) { Text("Continuar", color = Color.White) }
+            title = {
+                Text(
+                    "Aviso de Normativa",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold
+                )
             },
+            text = {
+                Text(
+                    "No tienes el número mínimo de $txtJugadoras para cumplir con la normativa (Mínimo 8). ¿Deseas guardar la convocatoria de todos modos?",
+                    textAlign = TextAlign.Justify
+                )
+            },
+            confirmButton = {},
             dismissButton = {
-                Button(
-                    onClick = { showMinPlayersWarning = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
-                ) { Text("Revisar", color = Color.White) }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { showMinPlayersWarning = false },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                    ) { Text("Revisar", color = Color.White) }
+
+                    Button(
+                        onClick = {
+                            showMinPlayersWarning = false
+                            saveMatchAction()
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                    ) { Text("Continuar", color = Color.White) }
+                }
             }
         )
     }
@@ -457,7 +478,6 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
     }
 }
 
-// Extensión para sombras en Listas Verticales
 fun Modifier.verticalScrollShadow(listState: LazyListState) = this.drawWithContent {
     drawContent()
     val showTop = listState.canScrollBackward

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1030210229946",
+    "project_id": "entrenamientos-875c1",
+    "storage_bucket": "entrenamientos-875c1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1030210229946:android:b20b7cb65d6123f04e9483",
+        "android_client_info": {
+          "package_name": "com.example.entrenamientos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD3gJ7dnM_88iOMFeCXiblVBgUDC25BDWc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     id("kotlin-kapt")
     alias(libs.plugins.hilt)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -36,7 +37,6 @@ android {
         jvmTarget = "1.8"
     }
 
-    // Activación necesaria de Jetpack Compose
     buildFeatures {
         compose = true
     }
@@ -69,6 +69,11 @@ dependencies {
     kapt(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
+    // Firebase (Auth & Firestore)
+    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
@@ -76,5 +81,4 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.5.2")
 
     implementation("androidx.compose.material:material-icons-extended")
-
 }
