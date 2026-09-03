@@ -1,5 +1,6 @@
 package com.example.entrenamientos.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import com.example.entrenamientos.data.Attendance
 import com.example.entrenamientos.data.Holiday
@@ -10,10 +11,13 @@ import com.example.entrenamientos.data.TrainingNote
 import com.example.entrenamientos.data.TrainingSchedule
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
 
 @HiltViewModel
@@ -21,6 +25,10 @@ class BasketViewModel @Inject constructor(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "BasketViewModel"
+    }
 
     // ============================================================
     // USUARIO ACTUAL
@@ -38,194 +46,508 @@ class BasketViewModel @Inject constructor(
     // ESTADOS
     // ============================================================
 
-    private val _teams = MutableStateFlow<List<Team>>(emptyList())
-    val teams: StateFlow<List<Team>> = _teams.asStateFlow()
+    private val _teams =
+        MutableStateFlow<List<Team>>(emptyList())
+    val teams: StateFlow<List<Team>> =
+        _teams.asStateFlow()
 
-    private val _schedules = MutableStateFlow<List<TrainingSchedule>>(emptyList())
-    val schedules: StateFlow<List<TrainingSchedule>> = _schedules.asStateFlow()
+    private val _schedules =
+        MutableStateFlow<List<TrainingSchedule>>(emptyList())
+    val schedules: StateFlow<List<TrainingSchedule>> =
+        _schedules.asStateFlow()
 
-    private val _matches = MutableStateFlow<List<Match>>(emptyList())
-    val matches: StateFlow<List<Match>> = _matches.asStateFlow()
+    private val _matches =
+        MutableStateFlow<List<Match>>(emptyList())
+    val matches: StateFlow<List<Match>> =
+        _matches.asStateFlow()
 
-    private val _holidays = MutableStateFlow<List<Holiday>>(emptyList())
-    val holidays: StateFlow<List<Holiday>> = _holidays.asStateFlow()
+    private val _holidays =
+        MutableStateFlow<List<Holiday>>(emptyList())
+    val holidays: StateFlow<List<Holiday>> =
+        _holidays.asStateFlow()
 
-    private val _players = MutableStateFlow<List<Player>>(emptyList())
-    private val _attendances = MutableStateFlow<List<Attendance>>(emptyList())
-    private val _trainingNotes = MutableStateFlow<List<TrainingNote>>(emptyList())
+    private val _players =
+        MutableStateFlow<List<Player>>(emptyList())
+    val players: StateFlow<List<Player>> =
+        _players.asStateFlow()
 
-    private val _selectedDate = MutableStateFlow("2026-09-01")
-    val selectedDate: StateFlow<String> = _selectedDate.asStateFlow()
+    private val _attendances =
+        MutableStateFlow<List<Attendance>>(emptyList())
+    val attendances: StateFlow<List<Attendance>> =
+        _attendances.asStateFlow()
 
-    private val _selectedTeamYear = MutableStateFlow(0)
-    val selectedTeamYear: StateFlow<Int> = _selectedTeamYear.asStateFlow()
+    private val _trainingNotes =
+        MutableStateFlow<List<TrainingNote>>(emptyList())
+    val trainingNotes: StateFlow<List<TrainingNote>> =
+        _trainingNotes.asStateFlow()
+
+    private val _selectedDate =
+        MutableStateFlow("2026-09-01")
+    val selectedDate: StateFlow<String> =
+        _selectedDate.asStateFlow()
+
+    private val _selectedTeamYear =
+        MutableStateFlow(0)
+    val selectedTeamYear: StateFlow<Int> =
+        _selectedTeamYear.asStateFlow()
+
+    // ============================================================
+    // LISTENERS FIREBASE
+    // ============================================================
+
+    private val firebaseListeners =
+        mutableListOf<ListenerRegistration>()
+
+    private var listeningUid: String? = null
+
+    private val authStateListener =
+        FirebaseAuth.AuthStateListener { firebaseAuth ->
+
+            val uid =
+                firebaseAuth.currentUser?.uid
+
+            if (uid == listeningUid) {
+                return@AuthStateListener
+            }
+
+            removeFirebaseListeners()
+
+            if (uid == null) {
+                clearLocalData()
+            } else {
+                startFirebaseListeners(uid)
+            }
+        }
 
     init {
-        setupFirebaseListeners()
+        auth.addAuthStateListener(authStateListener)
     }
 
     // ============================================================
-    // FIREBASE
+    // FIREBASE - LISTENERS
     // ============================================================
 
-    private fun setupFirebaseListeners() {
-        val user = userDoc ?: return
+    private fun startFirebaseListeners(
+        uid: String
+    ) {
 
+        listeningUid = uid
+
+        val user =
+            db.collection("users")
+                .document(uid)
+
+        // ========================================================
         // EQUIPOS
-        user.collection("teams").addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                return@addSnapshotListener
-            }
+        // ========================================================
 
-            if (snapshot != null) {
-                val list = snapshot.toObjects(Team::class.java)
-                _teams.value = list
+        firebaseListeners +=
+            user.collection("teams")
+                .addSnapshotListener { snapshot, error ->
 
-                if (
-                    list.isNotEmpty() &&
-                    _selectedTeamYear.value == 0
-                ) {
-                    _selectedTeamYear.value = list.first().year
+                    if (error != null) {
+
+                        Log.e(
+                            TAG,
+                            "Error leyendo equipos",
+                            error
+                        )
+
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null) {
+
+                        val list =
+                            snapshot.documents.mapNotNull { doc ->
+
+                                doc.toObject(
+                                    Team::class.java
+                                )
+                            }
+
+                        _teams.value = list
+
+                        if (
+                            list.isNotEmpty() &&
+                            _selectedTeamYear.value == 0
+                        ) {
+                            _selectedTeamYear.value =
+                                list.first().year
+                        }
+                    }
                 }
-            }
-        }
 
+        // ========================================================
         // HORARIOS
-        user.collection("schedules").addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                return@addSnapshotListener
-            }
+        // ========================================================
 
-            if (snapshot != null) {
-                _schedules.value =
-                    snapshot.toObjects(TrainingSchedule::class.java)
-            }
-        }
+        firebaseListeners +=
+            user.collection("schedules")
+                .addSnapshotListener { snapshot, error ->
 
-        // PARTIDOS
-        user.collection("matches").addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                return@addSnapshotListener
-            }
+                    if (error != null) {
 
-            if (snapshot != null) {
-                _matches.value =
-                    snapshot.toObjects(Match::class.java)
-            }
-        }
+                        Log.e(
+                            TAG,
+                            "Error leyendo horarios",
+                            error
+                        )
 
-        // FESTIVOS
-        user.collection("holidays").addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                return@addSnapshotListener
-            }
+                        return@addSnapshotListener
+                    }
 
-            if (snapshot != null) {
-                val list = snapshot.toObjects(Holiday::class.java)
+                    if (snapshot != null) {
 
-                if (list.isEmpty()) {
-                    createDefaultHolidays()
-                } else {
-                    _holidays.value = list
+                        _schedules.value =
+                            snapshot.documents.mapNotNull { doc ->
+                                doc.toObject(
+                                    TrainingSchedule::class.java
+                                )
+                            }
+                    }
                 }
-            }
-        }
 
+        // ========================================================
+        // PARTIDOS
+        // ========================================================
+
+        firebaseListeners +=
+            user.collection("matches")
+                .addSnapshotListener { snapshot, error ->
+
+                    if (error != null) {
+
+                        Log.e(
+                            TAG,
+                            "Error leyendo partidos",
+                            error
+                        )
+
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot == null) {
+                        return@addSnapshotListener
+                    }
+
+                    val loadedMatches =
+                        snapshot.documents.mapNotNull { doc ->
+
+                            val parsed =
+                                doc.toObject(
+                                    Match::class.java
+                                )
+                                    ?: return@mapNotNull null
+
+                            /*
+                             * Nos aseguramos de que el id usado
+                             * por la aplicación sea siempre el del
+                             * documento de Firestore.
+                             */
+                            val documentId =
+                                doc.id.toLongOrNull()
+
+                            val resolvedId =
+                                documentId
+                                    ?: parsed.id
+
+                            /*
+                             * Compatibilidad con documentos antiguos:
+                             *
+                             * Si el documento no tenía antes
+                             * isConvocatoriaSaved, Firestore no puede
+                             * distinguirlo de false al hacer
+                             * toObject().
+                             *
+                             * Pero una convocatoria guardada por la
+                             * aplicación sí tiene summonedPlayers.
+                             *
+                             * En ese caso consideramos que ya había
+                             * convocatoria guardada.
+                             */
+                            val data =
+                                doc.data
+
+                            val hasSavedField =
+                                data?.containsKey(
+                                    "isConvocatoriaSaved"
+                                ) == true
+
+                            val normalized =
+                                if (
+                                    !hasSavedField &&
+                                    parsed.summonedPlayers.isNotEmpty()
+                                ) {
+
+                                    parsed.copy(
+                                        id = resolvedId,
+                                        isConvocatoriaSaved = true
+                                    )
+
+                                } else {
+
+                                    parsed.copy(
+                                        id = resolvedId
+                                    )
+                                }
+
+                            normalized
+                        }
+
+                    _matches.value =
+                        loadedMatches
+                }
+
+        // ========================================================
+        // FESTIVOS
+        // ========================================================
+
+        firebaseListeners +=
+            user.collection("holidays")
+                .addSnapshotListener { snapshot, error ->
+
+                    if (error != null) {
+
+                        Log.e(
+                            TAG,
+                            "Error leyendo festivos",
+                            error
+                        )
+
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null) {
+
+                        val list =
+                            snapshot.documents.mapNotNull { doc ->
+                                doc.toObject(
+                                    Holiday::class.java
+                                )
+                            }
+
+                        if (list.isEmpty()) {
+                            createDefaultHolidays(uid)
+                        } else {
+                            _holidays.value = list
+                        }
+                    }
+                }
+
+        // ========================================================
         // JUGADORES
-        user.collection("players").addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                return@addSnapshotListener
-            }
+        // ========================================================
 
-            if (snapshot != null) {
-                _players.value =
-                    snapshot.toObjects(Player::class.java)
-            }
-        }
+        firebaseListeners +=
+            user.collection("players")
+                .addSnapshotListener { snapshot, error ->
 
+                    if (error != null) {
+
+                        Log.e(
+                            TAG,
+                            "Error leyendo jugadores",
+                            error
+                        )
+
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null) {
+
+                        _players.value =
+                            snapshot.documents.mapNotNull { doc ->
+                                doc.toObject(
+                                    Player::class.java
+                                )
+                            }
+                    }
+                }
+
+        // ========================================================
         // ASISTENCIAS
-        user.collection("attendances").addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                return@addSnapshotListener
-            }
+        // ========================================================
 
-            if (snapshot != null) {
-                _attendances.value =
-                    snapshot.toObjects(Attendance::class.java)
-            }
-        }
+        firebaseListeners +=
+            user.collection("attendances")
+                .addSnapshotListener { snapshot, error ->
 
-        // NOTAS
-        user.collection("training_notes").addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                return@addSnapshotListener
-            }
+                    if (error != null) {
 
-            if (snapshot != null) {
-                _trainingNotes.value =
-                    snapshot.toObjects(TrainingNote::class.java)
-            }
-        }
+                        Log.e(
+                            TAG,
+                            "Error leyendo asistencias",
+                            error
+                        )
+
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null) {
+
+                        _attendances.value =
+                            snapshot.documents.mapNotNull { doc ->
+                                doc.toObject(
+                                    Attendance::class.java
+                                )
+                            }
+                    }
+                }
+
+        // ========================================================
+        // NOTAS / QUINTETOS
+        // ========================================================
+
+        firebaseListeners +=
+            user.collection("training_notes")
+                .addSnapshotListener { snapshot, error ->
+
+                    if (error != null) {
+
+                        Log.e(
+                            TAG,
+                            "Error leyendo notas",
+                            error
+                        )
+
+                        return@addSnapshotListener
+                    }
+
+                    if (snapshot != null) {
+
+                        _trainingNotes.value =
+                            snapshot.documents.mapNotNull { doc ->
+                                doc.toObject(
+                                    TrainingNote::class.java
+                                )
+                            }
+                    }
+                }
     }
 
-    private fun createDefaultHolidays() {
-        val defaultHolidays = listOf(
-            Holiday("2026-10-12"),
-            Holiday("2026-10-21"),
-            Holiday("2026-10-30"),
-            Holiday("2026-11-02"),
-            Holiday("2026-11-30"),
-            Holiday("2026-12-03"),
-            Holiday("2026-12-04"),
-            Holiday("2026-12-07"),
-            Holiday("2026-12-08"),
-            Holiday("2026-12-22"),
-            Holiday("2026-12-23"),
-            Holiday("2026-12-24"),
-            Holiday("2026-12-25"),
-            Holiday("2026-12-26"),
-            Holiday("2026-12-27"),
-            Holiday("2026-12-28"),
-            Holiday("2026-12-29"),
-            Holiday("2026-12-30"),
-            Holiday("2026-12-31"),
-            Holiday("2027-01-01"),
-            Holiday("2027-01-02"),
-            Holiday("2027-01-03"),
-            Holiday("2027-01-04"),
-            Holiday("2027-01-05"),
-            Holiday("2027-01-06"),
-            Holiday("2027-01-07"),
-            Holiday("2027-01-08"),
-            Holiday("2027-02-08"),
-            Holiday("2027-02-09"),
-            Holiday("2027-03-19"),
-            Holiday("2027-03-25"),
-            Holiday("2027-03-26"),
-            Holiday("2027-03-27"),
-            Holiday("2027-03-28"),
-            Holiday("2027-03-29"),
-            Holiday("2027-03-30"),
-            Holiday("2027-03-31"),
-            Holiday("2027-04-01"),
-            Holiday("2027-04-02"),
-            Holiday("2027-04-30")
-        )
+    private fun removeFirebaseListeners() {
 
-        defaultHolidays.forEach {
-            insertHoliday(it)
+        firebaseListeners.forEach {
+            it.remove()
         }
+
+        firebaseListeners.clear()
+
+        listeningUid = null
     }
 
-    fun setSelectedDate(date: String) {
+    private fun clearLocalData() {
+
+        _teams.value = emptyList()
+        _schedules.value = emptyList()
+        _matches.value = emptyList()
+        _holidays.value = emptyList()
+        _players.value = emptyList()
+        _attendances.value = emptyList()
+        _trainingNotes.value = emptyList()
+
+        _selectedTeamYear.value = 0
+    }
+
+    // ============================================================
+    // FESTIVOS POR DEFECTO
+    // ============================================================
+
+    private fun createDefaultHolidays(
+        uid: String
+    ) {
+
+        val user =
+            db.collection("users")
+                .document(uid)
+
+        val defaultHolidays =
+            listOf(
+                Holiday("2026-10-12"),
+                Holiday("2026-10-21"),
+                Holiday("2026-10-30"),
+                Holiday("2026-11-02"),
+                Holiday("2026-11-30"),
+                Holiday("2026-12-03"),
+                Holiday("2026-12-04"),
+                Holiday("2026-12-07"),
+                Holiday("2026-12-08"),
+                Holiday("2026-12-22"),
+                Holiday("2026-12-23"),
+                Holiday("2026-12-24"),
+                Holiday("2026-12-25"),
+                Holiday("2026-12-26"),
+                Holiday("2026-12-27"),
+                Holiday("2026-12-28"),
+                Holiday("2026-12-29"),
+                Holiday("2026-12-30"),
+                Holiday("2026-12-31"),
+                Holiday("2027-01-01"),
+                Holiday("2027-01-02"),
+                Holiday("2027-01-03"),
+                Holiday("2027-01-04"),
+                Holiday("2027-01-05"),
+                Holiday("2027-01-06"),
+                Holiday("2027-01-07"),
+                Holiday("2027-01-08"),
+                Holiday("2027-02-08"),
+                Holiday("2027-02-09"),
+                Holiday("2027-03-19"),
+                Holiday("2027-03-25"),
+                Holiday("2027-03-26"),
+                Holiday("2027-03-27"),
+                Holiday("2027-03-28"),
+                Holiday("2027-03-29"),
+                Holiday("2027-03-30"),
+                Holiday("2027-03-31"),
+                Holiday("2027-04-01"),
+                Holiday("2027-04-02"),
+                Holiday("2027-04-30")
+            )
+
+        val batch =
+            db.batch()
+
+        defaultHolidays.forEach { holiday ->
+
+            batch.set(
+                user.collection("holidays")
+                    .document(holiday.date),
+                holiday
+            )
+        }
+
+        batch.commit()
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error creando festivos",
+                    error
+                )
+            }
+    }
+
+    // ============================================================
+    // SELECCIÓN
+    // ============================================================
+
+    fun setSelectedDate(
+        date: String
+    ) {
         _selectedDate.value = date
     }
 
-    fun setSelectedTeamYear(year: Int) {
+    fun setSelectedTeamYear(
+        year: Int
+    ) {
         _selectedTeamYear.value = year
     }
 
-    fun getNextAttendanceStatus(currentStatus: Int): Int {
+    fun getNextAttendanceStatus(
+        currentStatus: Int
+    ): Int {
         return (currentStatus + 1) % 3
     }
 
@@ -241,30 +563,52 @@ class BasketViewModel @Inject constructor(
         colorHex: String,
         trackMatches: Boolean
     ) {
-        val user = userDoc ?: return
+
+        val user =
+            userDoc ?: return
 
         val newId =
             if (_teams.value.isEmpty()) {
                 1
             } else {
-                _teams.value.maxOf { it.year } + 1
+                _teams.value.maxOf {
+                    it.year
+                } + 1
             }
 
-        val newTeam = Team(
-            year = newId,
-            name = name,
-            shortName = shortName,
-            gender = gender,
-            categoryYear = categoryYear,
-            colorHex = colorHex,
-            trackMatches = trackMatches
-        )
+        val newTeam =
+            Team(
+                year = newId,
+                name = name,
+                shortName = shortName,
+                gender = gender,
+                categoryYear = categoryYear,
+                colorHex = colorHex,
+                trackMatches = trackMatches
+            )
 
         user.collection("teams")
             .document(newId.toString())
             .set(newTeam)
+            .addOnSuccessListener {
 
-        _selectedTeamYear.value = newId
+                _teams.value =
+                    _teams.value
+                        .filter {
+                            it.year != newId
+                        } + newTeam
+
+                _selectedTeamYear.value =
+                    newId
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error guardando equipo",
+                    error
+                )
+            }
     }
 
     fun updateTeamData(
@@ -276,35 +620,56 @@ class BasketViewModel @Inject constructor(
         newColorHex: String,
         trackMatches: Boolean
     ) {
-        val user = userDoc ?: return
-        val existingTeam = _teams.value.find {
-            it.year == teamId
-        }
+
+        val user =
+            userDoc ?: return
+
+        val existingTeam =
+            _teams.value.find {
+                it.year == teamId
+            }
 
         val firstTrainingDate =
-            existingTeam?.firstTrainingDate ?: "2026-09-01"
+            existingTeam?.firstTrainingDate
+                ?: "2026-09-01"
 
-        val updatedTeam = Team(
-            year = teamId,
-            name = newName,
-            shortName = shortName,
-            gender = gender,
-            categoryYear = newCategoryYear,
-            colorHex = newColorHex,
-            firstTrainingDate = firstTrainingDate,
-            trackMatches = trackMatches
-        )
+        val updatedTeam =
+            Team(
+                year = teamId,
+                name = newName,
+                shortName = shortName,
+                gender = gender,
+                categoryYear = newCategoryYear,
+                colorHex = newColorHex,
+                firstTrainingDate = firstTrainingDate,
+                trackMatches = trackMatches
+            )
 
         user.collection("teams")
             .document(teamId.toString())
             .set(updatedTeam)
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error actualizando equipo",
+                    error
+                )
+            }
     }
 
-    fun deleteTeamCascade(team: Team) {
-        val user = userDoc ?: return
+    fun deleteTeamCascade(
+        team: Team
+    ) {
 
-        val teamYear = team.year
-        val batch = db.batch()
+        val user =
+            userDoc ?: return
+
+        val teamYear =
+            team.year
+
+        val batch =
+            db.batch()
 
         batch.delete(
             user.collection("teams")
@@ -312,8 +677,11 @@ class BasketViewModel @Inject constructor(
         )
 
         _players.value
-            .filter { it.teamYear == teamYear }
+            .filter {
+                it.teamYear == teamYear
+            }
             .forEach { player ->
+
                 batch.delete(
                     user.collection("players")
                         .document(player.id.toString())
@@ -321,8 +689,11 @@ class BasketViewModel @Inject constructor(
             }
 
         _schedules.value
-            .filter { it.teamYear == teamYear }
+            .filter {
+                it.teamYear == teamYear
+            }
             .forEach { schedule ->
+
                 batch.delete(
                     user.collection("schedules")
                         .document(schedule.id.toString())
@@ -330,8 +701,11 @@ class BasketViewModel @Inject constructor(
             }
 
         _matches.value
-            .filter { it.teamYear == teamYear }
+            .filter {
+                it.teamYear == teamYear
+            }
             .forEach { match ->
+
                 batch.delete(
                     user.collection("matches")
                         .document(match.id.toString())
@@ -339,8 +713,11 @@ class BasketViewModel @Inject constructor(
             }
 
         _attendances.value
-            .filter { it.teamYear == teamYear }
+            .filter {
+                it.teamYear == teamYear
+            }
             .forEach { attendance ->
+
                 batch.delete(
                     user.collection("attendances")
                         .document(
@@ -350,8 +727,11 @@ class BasketViewModel @Inject constructor(
             }
 
         _trainingNotes.value
-            .filter { it.teamYear == teamYear }
+            .filter {
+                it.teamYear == teamYear
+            }
             .forEach { note ->
+
                 batch.delete(
                     user.collection("training_notes")
                         .document(
@@ -360,15 +740,53 @@ class BasketViewModel @Inject constructor(
                 )
             }
 
-        batch.commit().addOnSuccessListener {
-            val remaining =
-                _teams.value.filter {
-                    it.year != teamYear
-                }
+        batch.commit()
+            .addOnSuccessListener {
 
-            _selectedTeamYear.value =
-                remaining.firstOrNull()?.year ?: 0
-        }
+                _teams.value =
+                    _teams.value.filter {
+                        it.year != teamYear
+                    }
+
+                _players.value =
+                    _players.value.filter {
+                        it.teamYear != teamYear
+                    }
+
+                _schedules.value =
+                    _schedules.value.filter {
+                        it.teamYear != teamYear
+                    }
+
+                _matches.value =
+                    _matches.value.filter {
+                        it.teamYear != teamYear
+                    }
+
+                _attendances.value =
+                    _attendances.value.filter {
+                        it.teamYear != teamYear
+                    }
+
+                _trainingNotes.value =
+                    _trainingNotes.value.filter {
+                        it.teamYear != teamYear
+                    }
+
+                _selectedTeamYear.value =
+                    _teams.value
+                        .firstOrNull()
+                        ?.year
+                        ?: 0
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error eliminando equipo",
+                    error
+                )
+            }
     }
 
     // ============================================================
@@ -381,44 +799,109 @@ class BasketViewModel @Inject constructor(
         dorsal: String?,
         teamYear: Int
     ) {
-        val user = userDoc ?: return
 
-        val newId = System.currentTimeMillis()
+        val user =
+            userDoc ?: return
 
-        val player = Player(
-            id = newId,
-            name = name,
-            lastName = lastName,
-            teamYear = teamYear,
-            dorsal = dorsal
-        )
+        val newId =
+            System.currentTimeMillis()
+
+        val player =
+            Player(
+                id = newId,
+                name = name,
+                lastName = lastName,
+                teamYear = teamYear,
+                dorsal = dorsal
+            )
 
         user.collection("players")
             .document(newId.toString())
             .set(player)
+            .addOnSuccessListener {
+
+                _players.value =
+                    _players.value
+                        .filter {
+                            it.id != newId
+                        } + player
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error guardando jugador",
+                    error
+                )
+            }
     }
 
-    fun updatePlayer(player: Player) {
-        val user = userDoc ?: return
+    fun updatePlayer(
+        player: Player
+    ) {
+
+        val user =
+            userDoc ?: return
 
         user.collection("players")
             .document(player.id.toString())
             .set(player)
+            .addOnSuccessListener {
+
+                _players.value =
+                    _players.value.map {
+                        if (it.id == player.id) {
+                            player
+                        } else {
+                            it
+                        }
+                    }
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error actualizando jugador",
+                    error
+                )
+            }
     }
 
-    fun deletePlayer(player: Player) {
-        val user = userDoc ?: return
+    fun deletePlayer(
+        player: Player
+    ) {
+
+        val user =
+            userDoc ?: return
 
         user.collection("players")
             .document(player.id.toString())
             .delete()
+            .addOnSuccessListener {
+
+                _players.value =
+                    _players.value.filter {
+                        it.id != player.id
+                    }
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error eliminando jugador",
+                    error
+                )
+            }
     }
 
     fun getPlayersForTeam(
         year: Int
-    ): kotlinx.coroutines.flow.Flow<List<Player>> {
-        return kotlinx.coroutines.flow.flow {
+    ): Flow<List<Player>> {
+
+        return flow {
+
             _players.collect { allPlayers ->
+
                 emit(
                     allPlayers.filter {
                         it.teamYear == year
@@ -429,7 +912,7 @@ class BasketViewModel @Inject constructor(
     }
 
     // ============================================================
-    // NOTAS Y QUINTETOS
+    // NOTAS / QUINTETOS
     // ============================================================
 
     fun saveTrainingNote(
@@ -439,10 +922,15 @@ class BasketViewModel @Inject constructor(
         content: String,
         existingNote: TrainingNote? = null
     ) {
-        val user = userDoc ?: return
+
+        val user =
+            userDoc ?: return
 
         val noteToSave =
             existingNote?.copy(
+                date = date,
+                teamYear = teamYear,
+                noteType = type,
                 content = content
             )
                 ?: TrainingNote(
@@ -452,20 +940,42 @@ class BasketViewModel @Inject constructor(
                     content = content
                 )
 
-        val docId = "${date}_${teamYear}_${type}"
+        val docId =
+            "${date}_${teamYear}_${type}"
 
         user.collection("training_notes")
             .document(docId)
             .set(noteToSave)
+            .addOnSuccessListener {
+
+                _trainingNotes.value =
+                    _trainingNotes.value
+                        .filterNot {
+                            it.date == date &&
+                                    it.teamYear == teamYear &&
+                                    it.noteType == type
+                        } + noteToSave
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error guardando TrainingNote",
+                    error
+                )
+            }
     }
 
     fun getTrainingNoteForDateAndTeam(
         date: String,
         year: Int,
         type: String
-    ): kotlinx.coroutines.flow.Flow<TrainingNote?> {
-        return kotlinx.coroutines.flow.flow {
+    ): Flow<TrainingNote?> {
+
+        return flow {
+
             _trainingNotes.collect { notes ->
+
                 emit(
                     notes.find {
                         it.date == date &&
@@ -484,15 +994,20 @@ class BasketViewModel @Inject constructor(
     fun getTeamsForDate(
         date: java.time.LocalDate
     ): List<Int> {
+
         if (isHoliday(date)) {
             return emptyList()
         }
 
-        val dayValue = date.dayOfWeek.value
+        val dayValue =
+            date.dayOfWeek.value
 
         return _schedules.value
             .filter { schedule ->
-                if (schedule.dayOfWeek != dayValue) {
+
+                if (
+                    schedule.dayOfWeek != dayValue
+                ) {
                     return@filter false
                 }
 
@@ -502,18 +1017,27 @@ class BasketViewModel @Inject constructor(
                     }
 
                 val firstDateStr =
-                    team?.firstTrainingDate ?: "2026-09-01"
+                    team?.firstTrainingDate
+                        ?: "2026-09-01"
 
                 val firstDate =
                     try {
-                        java.time.LocalDate.parse(firstDateStr)
+                        java.time.LocalDate.parse(
+                            firstDateStr
+                        )
                     } catch (_: Exception) {
-                        java.time.LocalDate.of(2026, 9, 1)
+                        java.time.LocalDate.of(
+                            2026,
+                            9,
+                            1
+                        )
                     }
 
                 !date.isBefore(firstDate)
             }
-            .map { it.teamYear }
+            .map {
+                it.teamYear
+            }
             .distinct()
     }
 
@@ -521,7 +1045,9 @@ class BasketViewModel @Inject constructor(
         teamId: Int,
         newDate: String
     ) {
-        val user = userDoc ?: return
+
+        val user =
+            userDoc ?: return
 
         val team =
             _teams.value.find {
@@ -529,6 +1055,7 @@ class BasketViewModel @Inject constructor(
             }
 
         if (team != null) {
+
             user.collection("teams")
                 .document(teamId.toString())
                 .set(
@@ -536,15 +1063,42 @@ class BasketViewModel @Inject constructor(
                         firstTrainingDate = newDate
                     )
                 )
+                .addOnFailureListener { error ->
+
+                    Log.e(
+                        TAG,
+                        "Error actualizando fecha inicial",
+                        error
+                    )
+                }
         }
     }
 
-    fun deleteSchedule(schedule: TrainingSchedule) {
-        val user = userDoc ?: return
+    fun deleteSchedule(
+        schedule: TrainingSchedule
+    ) {
+
+        val user =
+            userDoc ?: return
 
         user.collection("schedules")
             .document(schedule.id.toString())
             .delete()
+            .addOnSuccessListener {
+
+                _schedules.value =
+                    _schedules.value.filter {
+                        it.id != schedule.id
+                    }
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error eliminando horario",
+                    error
+                )
+            }
     }
 
     fun addOrUpdateSchedule(
@@ -552,10 +1106,16 @@ class BasketViewModel @Inject constructor(
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        val user = userDoc
+
+        val user =
+            userDoc
 
         if (user == null) {
-            onError("No hay un usuario autenticado.")
+
+            onError(
+                "No hay un usuario autenticado."
+            )
+
             return
         }
 
@@ -567,69 +1127,101 @@ class BasketViewModel @Inject constructor(
             }
 
         val newStart =
-            parseTime(newSchedule.startTime)
+            parseTime(
+                newSchedule.startTime
+            )
 
         val newEnd =
-            parseTime(newSchedule.endTime)
+            parseTime(
+                newSchedule.endTime
+            )
 
         if (newStart >= newEnd) {
+
             onError(
-                "La hora de inicio debe ser anterior a la de fin"
+                "La hora de inicio debe ser anterior a la de fin."
             )
+
             return
         }
 
         for (schedule in daySchedules) {
+
             val existStart =
-                parseTime(schedule.startTime)
+                parseTime(
+                    schedule.startTime
+                )
 
             val existEnd =
-                parseTime(schedule.endTime)
+                parseTime(
+                    schedule.endTime
+                )
 
             if (
                 maxOf(newStart, existStart) <
                 minOf(newEnd, existEnd)
             ) {
+
                 onError(
-                    "El horario se solapa con otro entrenamiento (${schedule.startTime}-${schedule.endTime})"
+                    "El horario se solapa con otro entrenamiento (${schedule.startTime}-${schedule.endTime})."
                 )
+
                 return
             }
         }
 
         val scheduleToSave =
             if (newSchedule.id == 0L) {
+
                 newSchedule.copy(
                     id = System.currentTimeMillis()
                 )
+
             } else {
                 newSchedule
             }
 
         user.collection("schedules")
-            .document(scheduleToSave.id.toString())
+            .document(
+                scheduleToSave.id.toString()
+            )
             .set(scheduleToSave)
             .addOnSuccessListener {
+
+                _schedules.value =
+                    _schedules.value
+                        .filterNot {
+                            it.id == scheduleToSave.id
+                        } + scheduleToSave
+
                 onSuccess()
             }
-            .addOnFailureListener {
+            .addOnFailureListener { error ->
+
                 onError(
-                    it.message
+                    error.message
                         ?: "No se pudo guardar el horario."
                 )
             }
     }
 
-    private fun parseTime(time: String): Int {
-        val parts = time.split(":")
+    private fun parseTime(
+        time: String
+    ): Int {
+
+        val parts =
+            time.split(":")
 
         if (parts.size != 2) {
             return 0
         }
 
-        return parts[0].toIntOrNull()
+        return parts[0]
+            .toIntOrNull()
             ?.times(60)
-            ?.plus(parts[1].toIntOrNull() ?: 0)
+            ?.plus(
+                parts[1].toIntOrNull() ?: 0
+            )
             ?: 0
     }
 
@@ -640,9 +1232,12 @@ class BasketViewModel @Inject constructor(
     fun getAttendanceForDateAndTeam(
         date: String,
         year: Int
-    ): kotlinx.coroutines.flow.Flow<List<Attendance>> {
-        return kotlinx.coroutines.flow.flow {
+    ): Flow<List<Attendance>> {
+
+        return flow {
+
             _attendances.collect { allAtt ->
+
                 emit(
                     allAtt.filter {
                         it.date == date &&
@@ -656,28 +1251,62 @@ class BasketViewModel @Inject constructor(
     fun saveAttendances(
         attendances: List<Attendance>
     ) {
-        val user = userDoc ?: return
 
-        val batch = db.batch()
+        val user =
+            userDoc ?: return
+
+        val batch =
+            db.batch()
 
         attendances.forEach { attendance ->
+
             val docRef =
                 user.collection("attendances")
                     .document(
                         "${attendance.date}_${attendance.playerId}"
                     )
 
-            batch.set(docRef, attendance)
+            batch.set(
+                docRef,
+                attendance
+            )
         }
 
         batch.commit()
+            .addOnSuccessListener {
+
+                _attendances.value =
+                    _attendances.value
+                        .filterNot { existing ->
+
+                            attendances.any { saved ->
+
+                                saved.date ==
+                                        existing.date &&
+                                        saved.playerId ==
+                                        existing.playerId
+                            }
+
+                        } + attendances
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error guardando asistencias",
+                    error
+                )
+            }
     }
 
     fun getAllAttendancesByTeam(
         year: Int
-    ): kotlinx.coroutines.flow.Flow<List<Attendance>> {
-        return kotlinx.coroutines.flow.flow {
+    ): Flow<List<Attendance>> {
+
+        return flow {
+
             _attendances.collect { allAtt ->
+
                 emit(
                     allAtt.filter {
                         it.teamYear == year
@@ -688,7 +1317,7 @@ class BasketViewModel @Inject constructor(
     }
 
     // ============================================================
-    // PARTIDOS
+    // PARTIDOS / CONVOCATORIA / RESULTADO
     // ============================================================
 
     fun addOrUpdateMatch(
@@ -696,17 +1325,23 @@ class BasketViewModel @Inject constructor(
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
-        val user = userDoc
+
+        val user =
+            userDoc
 
         if (user == null) {
+
             onError(
                 "No hay ningún usuario autenticado."
             )
+
             return
         }
 
-        // Comprobamos que no exista otro partido
-        // del mismo equipo en la misma fecha.
+        /*
+         * Solo comprobamos duplicados cuando es realmente
+         * otro documento.
+         */
         val existing =
             _matches.value.find {
                 it.date == match.date &&
@@ -715,53 +1350,70 @@ class BasketViewModel @Inject constructor(
             }
 
         if (existing != null) {
+
             onError(
                 "Este equipo ya tiene un partido programado para este día."
             )
+
             return
         }
 
         val matchToSave =
             if (match.id == 0L) {
+
                 match.copy(
                     id = System.currentTimeMillis()
                 )
+
             } else {
                 match
             }
 
-        // IMPORTANTE:
-        // NO actualizamos _matches todavía.
-        // Primero esperamos confirmación de Firebase.
-        user.collection("matches")
-            .document(matchToSave.id.toString())
+        /*
+         * Muy importante:
+         *
+         * Se utiliza SIEMPRE el id real del Match.
+         * No se crea otro documento al editar una convocatoria.
+         */
+        val matchRef =
+            user.collection("matches")
+                .document(
+                    matchToSave.id.toString()
+                )
+
+        matchRef
             .set(matchToSave)
             .addOnSuccessListener {
 
-                // Firebase ha confirmado el guardado.
-                val currentMatches =
-                    _matches.value
-
+                /*
+                 * Solo actualizamos el estado local después
+                 * de que Firestore confirme el guardado.
+                 */
                 _matches.value =
-                    if (
-                        currentMatches.any {
+                    _matches.value
+                        .filterNot {
                             it.id == matchToSave.id
-                        }
-                    ) {
-                        currentMatches.map {
-                            if (it.id == matchToSave.id) {
-                                matchToSave
-                            } else {
-                                it
-                            }
-                        }
-                    } else {
-                        currentMatches + matchToSave
-                    }
+                        } + matchToSave
+
+                Log.d(
+                    TAG,
+                    "Match guardado correctamente: " +
+                            "id=${matchToSave.id}, " +
+                            "date=${matchToSave.date}, " +
+                            "team=${matchToSave.teamYear}, " +
+                            "isConvocatoriaSaved=${matchToSave.isConvocatoriaSaved}"
+                )
 
                 onSuccess()
             }
             .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "ERROR guardando Match " +
+                            "${matchToSave.id}",
+                    error
+                )
 
                 onError(
                     error.message
@@ -770,8 +1422,12 @@ class BasketViewModel @Inject constructor(
             }
     }
 
-    fun deleteMatch(match: Match) {
-        val user = userDoc ?: return
+    fun deleteMatch(
+        match: Match
+    ) {
+
+        val user =
+            userDoc ?: return
 
         user.collection("matches")
             .document(match.id.toString())
@@ -783,6 +1439,14 @@ class BasketViewModel @Inject constructor(
                         it.id != match.id
                     }
             }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error eliminando partido",
+                    error
+                )
+            }
     }
 
     // ============================================================
@@ -792,6 +1456,7 @@ class BasketViewModel @Inject constructor(
     fun isHoliday(
         date: java.time.LocalDate
     ): Boolean {
+
         return _holidays.value.any {
             it.date == date.toString()
         }
@@ -800,14 +1465,35 @@ class BasketViewModel @Inject constructor(
     private fun insertHoliday(
         holiday: Holiday
     ) {
-        val user = userDoc ?: return
+
+        val user =
+            userDoc ?: return
 
         user.collection("holidays")
             .document(holiday.date)
             .set(holiday)
+            .addOnSuccessListener {
+
+                _holidays.value =
+                    _holidays.value
+                        .filterNot {
+                            it.date == holiday.date
+                        } + holiday
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error insertando festivo",
+                    error
+                )
+            }
     }
 
-    fun addHoliday(date: String) {
+    fun addHoliday(
+        date: String
+    ) {
+
         insertHoliday(
             Holiday(date)
         )
@@ -816,11 +1502,28 @@ class BasketViewModel @Inject constructor(
     fun removeHoliday(
         holiday: Holiday
     ) {
-        val user = userDoc ?: return
+
+        val user =
+            userDoc ?: return
 
         user.collection("holidays")
             .document(holiday.date)
             .delete()
+            .addOnSuccessListener {
+
+                _holidays.value =
+                    _holidays.value.filter {
+                        it.date != holiday.date
+                    }
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error eliminando festivo",
+                    error
+                )
+            }
     }
 
     // ============================================================
@@ -847,7 +1550,8 @@ class BasketViewModel @Inject constructor(
                 1
             )
 
-        var currDate = seasonStart
+        var currDate =
+            seasonStart
 
         while (currDate.isBefore(matchDate)) {
 
@@ -858,7 +1562,8 @@ class BasketViewModel @Inject constructor(
 
                 val hasAttendance =
                     attendances.any {
-                        it.date == currDate.toString()
+                        it.date ==
+                                currDate.toString()
                     }
 
                 if (!hasAttendance) {
@@ -887,10 +1592,19 @@ class BasketViewModel @Inject constructor(
     // ============================================================
 
     var draftMatchDate: String? = null
+        private set
+
     var draftTeamYear: Int? = null
+        private set
+
     var draftSummonedIds: Set<Long>? = null
+        private set
+
     var draftReasonsMap: Map<String, String>? = null
+        private set
+
     var draftIsEditMode: Boolean? = null
+        private set
 
     fun saveDraftConvocatoria(
         date: String,
@@ -899,18 +1613,44 @@ class BasketViewModel @Inject constructor(
         reasons: Map<String, String>,
         isEdit: Boolean
     ) {
-        draftMatchDate = date
-        draftTeamYear = teamYear
-        draftSummonedIds = summoned
-        draftReasonsMap = reasons
-        draftIsEditMode = isEdit
+
+        draftMatchDate =
+            date
+
+        draftTeamYear =
+            teamYear
+
+        draftSummonedIds =
+            summoned
+
+        draftReasonsMap =
+            reasons
+
+        draftIsEditMode =
+            isEdit
     }
 
     fun clearDraftConvocatoria() {
+
         draftMatchDate = null
         draftTeamYear = null
         draftSummonedIds = null
         draftReasonsMap = null
         draftIsEditMode = null
+    }
+
+    // ============================================================
+    // LIFECYCLE
+    // ============================================================
+
+    override fun onCleared() {
+
+        removeFirebaseListeners()
+
+        auth.removeAuthStateListener(
+            authStateListener
+        )
+
+        super.onCleared()
     }
 }

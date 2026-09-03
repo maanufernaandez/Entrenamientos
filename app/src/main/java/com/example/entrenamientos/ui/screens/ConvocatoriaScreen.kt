@@ -1,15 +1,37 @@
 package com.example.entrenamientos.ui.screens
 
 import android.annotation.SuppressLint
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,7 +45,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.entrenamientos.data.Player
 import com.example.entrenamientos.ui.BasketViewModel
+import com.example.entrenamientos.ui.theme.AttendanceGreen
+import com.example.entrenamientos.ui.theme.AttendanceRed
+import com.example.entrenamientos.ui.theme.SuccessGreen
 
 @SuppressLint("MutableCollectionMutableState")
 @Composable
@@ -34,30 +60,28 @@ fun ConvocatoriaScreen(
     val selectedDateStr by viewModel.selectedDate.collectAsState()
     val teamYear by viewModel.selectedTeamYear.collectAsState()
 
-    val date = java.time.LocalDate.parse(
-        selectedDateStr
-    )
+    val date = try {
+        java.time.LocalDate.parse(selectedDateStr)
+    } catch (_: Exception) {
+        return
+    }
 
     val allMatches by viewModel.matches.collectAsState()
 
-    val match =
-        allMatches.find {
-            it.date == selectedDateStr &&
-                    it.teamYear == teamYear
-        } ?: return
+    val match = allMatches.find {
+        it.date == selectedDateStr &&
+                it.teamYear == teamYear
+    } ?: return
 
     val teamsList by viewModel.teams.collectAsState()
 
-    val matchTeam =
-        teamsList.find {
-            it.year == match.teamYear
-        }
+    val matchTeam = teamsList.find {
+        it.year == match.teamYear
+    }
 
-    val isFemale =
-        matchTeam?.gender == "F"
+    val isFemale = matchTeam?.gender == "F"
 
-    val category =
-        matchTeam?.categoryYear ?: ""
+    val category = matchTeam?.categoryYear ?: ""
 
     val isSeniorCategory =
         category.startsWith("Cadete") ||
@@ -77,12 +101,11 @@ fun ConvocatoriaScreen(
         category.startsWith("Benjamin 3x3") ||
                 category.startsWith("Pre-Benjamin 3x3")
 
-    val minPlayers =
-        when {
-            is3x3 -> 4
-            isSeniorCategory -> 5
-            else -> 8
-        }
+    val minPlayers = when {
+        is3x3 -> 4
+        isSeniorCategory -> 5
+        else -> 8
+    }
 
     val absoluteMinPlayers =
         if (isInfantil) 5 else minPlayers
@@ -109,8 +132,7 @@ fun ConvocatoriaScreen(
         .getPlayersForTeam(match.teamYear)
         .collectAsState(initial = emptyList())
 
-    val context =
-        androidx.compose.ui.platform.LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // ============================================================
     // BORRADOR
@@ -127,14 +149,11 @@ fun ConvocatoriaScreen(
     ) {
         mutableStateOf(
             when {
-                match.isConvocatoriaSaved ->
-                    false
+                match.isConvocatoriaSaved -> false
 
-                hasDraft ->
-                    viewModel.draftIsEditMode ?: true
+                hasDraft -> viewModel.draftIsEditMode ?: true
 
-                else ->
-                    true
+                else -> true
             }
         )
     }
@@ -151,7 +170,7 @@ fun ConvocatoriaScreen(
 
                 hasDraft &&
                         viewModel.draftSummonedIds != null ->
-                    viewModel.draftSummonedIds!!
+                    viewModel.draftSummonedIds!!.toSet()
 
                 else ->
                     players.map { it.id }.toSet()
@@ -170,8 +189,7 @@ fun ConvocatoriaScreen(
 
                 hasDraft &&
                         viewModel.draftReasonsMap != null ->
-                    viewModel.draftReasonsMap!!
-                        .toMutableMap()
+                    viewModel.draftReasonsMap!!.toMutableMap()
 
                 else ->
                     mutableMapOf()
@@ -184,6 +202,10 @@ fun ConvocatoriaScreen(
     }
 
     var showMinPlayersWarning by remember {
+        mutableStateOf(false)
+    }
+
+    var isSaving by remember {
         mutableStateOf(false)
     }
 
@@ -220,56 +242,138 @@ fun ConvocatoriaScreen(
     // GUARDAR CONVOCATORIA
     // ============================================================
 
-    val saveMatchAction = {
-        shouldSaveDraft = false
+    fun saveConvocatoria() {
+
+        if (isSaving) return
+
+        isSaving = true
+        showMinPlayersWarning = false
 
         val convocatoriaChanged =
             !match.isConvocatoriaSaved ||
                     match.summonedPlayers.toSet() != summonedIds ||
                     match.unsummonedReasons != reasonsMap
 
-        // Si cambia la convocatoria, los quintetos anteriores
-        // dejan de ser válidos.
-        if (convocatoriaChanged) {
-            viewModel.saveTrainingNote(
-                selectedDateStr,
-                match.teamYear,
-                "QUINTETOS",
-                "",
-                null
-            )
-        }
+        val updatedMatch = match.copy(
+            isConvocatoriaSaved = true,
+            summonedPlayers = summonedIds.toList().sorted(),
+            unsummonedReasons = reasonsMap.toMap()
+        )
 
-        val updatedMatch =
-            match.copy(
-                isConvocatoriaSaved = true,
-                summonedPlayers = summonedIds.toList(),
-                unsummonedReasons = reasonsMap.toMap()
-            )
-
+        /*
+         * IMPORTANTE:
+         * Primero guardamos el Match en Firestore.
+         * Solo después de onSuccess consideramos la convocatoria oficial.
+         */
         viewModel.addOrUpdateMatch(
             match = updatedMatch,
 
             onSuccess = {
-                // SOLO AQUÍ consideramos oficialmente guardada
-                // la convocatoria.
+
+                /*
+                 * Solo limpiamos los quintetos antiguos cuando
+                 * la convocatoria se ha guardado correctamente.
+                 */
+                if (convocatoriaChanged) {
+                    viewModel.saveTrainingNote(
+                        selectedDateStr,
+                        match.teamYear,
+                        "QUINTETOS",
+                        "",
+                        null
+                    )
+                }
 
                 viewModel.clearDraftConvocatoria()
 
+                shouldSaveDraft = false
                 isEditMode = false
+                isSaving = false
+
+                Toast.makeText(
+                    context,
+                    "Convocatoria guardada correctamente",
+                    Toast.LENGTH_SHORT
+                ).show()
             },
 
             onError = { errorMessage ->
 
-                // Firebase ha rechazado el guardado.
-                // No mostramos la convocatoria como oficial.
-
+                /*
+                 * Firebase ha rechazado el guardado.
+                 * NO cambiamos a convocatoria oficial.
+                 */
+                isSaving = false
                 shouldSaveDraft = true
 
-                android.widget.Toast.makeText(
+                Toast.makeText(
                     context,
-                    errorMessage,
-                    android.widget.Toast.LENGTH_LONG
+                    "No se pudo guardar la convocatoria:\n$errorMessage",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        )
+    }
+
+    // ============================================================
+    // ELIMINAR CONVOCATORIA
+    // ============================================================
+
+    fun eliminarConvocatoria() {
+
+        if (isSaving) return
+
+        isSaving = true
+        shouldSaveDraft = false
+
+        val resetMatch = match.copy(
+            isConvocatoriaSaved = false,
+            summonedPlayers = emptyList(),
+            unsummonedReasons = emptyMap()
+        )
+
+        viewModel.addOrUpdateMatch(
+            match = resetMatch,
+
+            onSuccess = {
+
+                /*
+                 * Los quintetos dejan de ser válidos al eliminar
+                 * la convocatoria.
+                 */
+                viewModel.saveTrainingNote(
+                    selectedDateStr,
+                    match.teamYear,
+                    "QUINTETOS",
+                    "",
+                    null
+                )
+
+                viewModel.clearDraftConvocatoria()
+
+                summonedIds = emptySet()
+                reasonsMap = mutableMapOf()
+
+                shouldSaveDraft = true
+                isEditMode = true
+                isSaving = false
+
+                Toast.makeText(
+                    context,
+                    "Convocatoria eliminada",
+                    Toast.LENGTH_SHORT
+                ).show()
+            },
+
+            onError = { errorMessage ->
+
+                isSaving = false
+                shouldSaveDraft = true
+
+                Toast.makeText(
+                    context,
+                    "No se pudo eliminar la convocatoria:\n$errorMessage",
+                    Toast.LENGTH_LONG
                 ).show()
             }
         )
@@ -280,31 +384,26 @@ fun ConvocatoriaScreen(
     // ============================================================
 
     var playerToUnsummon by remember {
-        mutableStateOf<com.example.entrenamientos.data.Player?>(
-            null
-        )
+        mutableStateOf<Player?>(null)
     }
 
-    val reasonOptions =
-        listOf(
-            "Rotación",
-            "Lesión",
-            "Falta a entrenamientos",
-            "Castigada",
-            "No puede ir"
-        )
+    val reasonOptions = listOf(
+        "Rotación",
+        "Lesión",
+        "Falta a entrenamientos",
+        "Castigada",
+        "No puede ir"
+    )
 
     val playerSortComparator =
-        compareBy<com.example.entrenamientos.data.Player> {
+        compareBy<Player> {
             it.dorsal.isNullOrBlank()
         }.thenBy {
             it.dorsal?.toIntOrNull() ?: 999
         }
 
     val sortedPlayers =
-        players.sortedWith(
-            playerSortComparator
-        )
+        players.sortedWith(playerSortComparator)
 
     val dayOfWeek =
         date.dayOfWeek.getDisplayName(
@@ -329,10 +428,20 @@ fun ConvocatoriaScreen(
     // BACK
     // ============================================================
 
-    androidx.activity.compose.BackHandler {
+    BackHandler {
+
+        /*
+         * Si pulsamos atrás no queremos guardar como borrador
+         * cuando estamos saliendo de una convocatoria oficial.
+         */
         shouldSaveDraft = false
+
         navController.popBackStack()
     }
+
+    // ============================================================
+    // UI
+    // ============================================================
 
     Column(
         modifier = Modifier
@@ -366,7 +475,7 @@ fun ConvocatoriaScreen(
         )
 
         // ========================================================
-        // RESUMEN
+        // RESUMEN DE CONVOCATORIA GUARDADA
         // ========================================================
 
         if (!isEditMode) {
@@ -376,8 +485,9 @@ fun ConvocatoriaScreen(
                 match.summonedPlayers.size in 5..7
             ) {
                 Text(
-                    text = "¡AVISO! No dispones del número mínimo de $txtJugadoras para cumplir con la normativa.",
-                    color = com.example.entrenamientos.ui.theme.AttendanceRed,
+                    text =
+                    "¡AVISO! No dispones del número mínimo de $txtJugadoras para cumplir con la normativa.",
+                    color = AttendanceRed,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
@@ -404,7 +514,7 @@ fun ConvocatoriaScreen(
                 state = listStateRead,
                 modifier = Modifier
                     .weight(1f)
-                    .verticalScrollShadow(
+                    .convocatoriaVerticalScrollShadow(
                         listStateRead
                     )
             ) {
@@ -416,8 +526,7 @@ fun ConvocatoriaScreen(
                         "- $txtConvocadas (${convocadas.size}/$maxPlayers)",
                         style =
                         MaterialTheme.typography.titleMedium,
-                        color =
-                        com.example.entrenamientos.ui.theme.SuccessGreen
+                        color = SuccessGreen
                     )
 
                     Spacer(
@@ -497,8 +606,7 @@ fun ConvocatoriaScreen(
                         "- $txtDesconvocadas (${desconvocadas.size})",
                         style =
                         MaterialTheme.typography.titleMedium,
-                        color =
-                        com.example.entrenamientos.ui.theme.AttendanceRed
+                        color = AttendanceRed
                     )
 
                     Spacer(
@@ -559,19 +667,22 @@ fun ConvocatoriaScreen(
             )
 
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                Modifier.fillMaxWidth(),
                 verticalArrangement =
                 Arrangement.spacedBy(8.dp)
             ) {
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier =
+                    Modifier.fillMaxWidth(),
                     horizontalArrangement =
                     Arrangement.spacedBy(8.dp)
                 ) {
 
                     Button(
                         onClick = {
+
                             shouldSaveDraft = false
                             navController.popBackStack()
                         },
@@ -580,7 +691,8 @@ fun ConvocatoriaScreen(
                             containerColor = Color.DarkGray
                         ),
                         modifier =
-                        Modifier.weight(1f)
+                        Modifier.weight(1f),
+                        enabled = !isSaving
                     ) {
                         Text(
                             "Volver",
@@ -590,16 +702,29 @@ fun ConvocatoriaScreen(
 
                     Button(
                         onClick = {
+
+                            /*
+                             * Al editar una convocatoria oficial
+                             * cargamos de nuevo exactamente los datos
+                             * que estaban guardados en Match.
+                             */
                             shouldSaveDraft = true
+
+                            summonedIds =
+                                match.summonedPlayers.toSet()
+
+                            reasonsMap =
+                                match.unsummonedReasons.toMutableMap()
+
                             isEditMode = true
                         },
                         colors =
                         ButtonDefaults.buttonColors(
-                            containerColor =
-                            com.example.entrenamientos.ui.theme.AttendanceGreen
+                            containerColor = AttendanceGreen
                         ),
                         modifier =
-                        Modifier.weight(1f)
+                        Modifier.weight(1f),
+                        enabled = !isSaving
                     ) {
                         Text(
                             "Editar",
@@ -610,60 +735,32 @@ fun ConvocatoriaScreen(
 
                 Button(
                     onClick = {
-
-                        shouldSaveDraft = false
-
-                        summonedIds = emptySet()
-                        reasonsMap =
-                            mutableMapOf()
-
-                        viewModel.saveTrainingNote(
-                            selectedDateStr,
-                            match.teamYear,
-                            "QUINTETOS",
-                            "",
-                            null
-                        )
-
-                        val resetMatch =
-                            match.copy(
-                                isConvocatoriaSaved = false,
-                                summonedPlayers = emptyList(),
-                                unsummonedReasons = emptyMap()
-                            )
-
-                        viewModel.addOrUpdateMatch(
-                            match = resetMatch,
-                            onSuccess = {
-                                viewModel.clearDraftConvocatoria()
-                                shouldSaveDraft = true
-                                isEditMode = true
-                            },
-                            onError = {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    it,
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        )
+                        eliminarConvocatoria()
                     },
                     colors =
                     ButtonDefaults.buttonColors(
-                        containerColor =
-                        com.example.entrenamientos.ui.theme.AttendanceRed
+                        containerColor = AttendanceRed
                     ),
                     modifier =
-                    Modifier.fillMaxWidth()
+                    Modifier.fillMaxWidth(),
+                    enabled = !isSaving
                 ) {
                     Text(
-                        "Eliminar",
+                        if (isSaving) {
+                            "Guardando..."
+                        } else {
+                            "Eliminar"
+                        },
                         color = Color.White
                     )
                 }
             }
 
         } else {
+
+            // ====================================================
+            // EDICIÓN
+            // ====================================================
 
             Text(
                 text =
@@ -683,7 +780,7 @@ fun ConvocatoriaScreen(
                 state = listStateEdit,
                 modifier = Modifier
                     .weight(1f)
-                    .verticalScrollShadow(
+                    .convocatoriaVerticalScrollShadow(
                         listStateEdit
                     )
             ) {
@@ -695,9 +792,9 @@ fun ConvocatoriaScreen(
 
                     val containerColor =
                         if (isSummoned) {
-                            com.example.entrenamientos.ui.theme.SuccessGreen
+                            SuccessGreen
                         } else {
-                            com.example.entrenamientos.ui.theme.AttendanceRed
+                            AttendanceRed
                         }
 
                     Row(
@@ -708,23 +805,31 @@ fun ConvocatoriaScreen(
                             .background(
                                 containerColor.copy(alpha = 0.2f)
                             )
-                            .clickable {
+                            .clickable(
+                                enabled = !isSaving
+                            ) {
 
                                 if (isSummoned) {
+
                                     playerToUnsummon =
                                         player
+
                                 } else {
+
                                     summonedIds =
                                         summonedIds + player.id
 
-                                    reasonsMap.remove(
-                                        player.id.toString()
-                                    )
+                                    reasonsMap =
+                                        reasonsMap.toMutableMap().apply {
+                                            remove(player.id.toString())
+                                        }
                                 }
                             }
                             .padding(16.dp),
+
                         verticalAlignment =
                         Alignment.CenterVertically,
+
                         horizontalArrangement =
                         Arrangement.SpaceBetween
                     ) {
@@ -787,6 +892,7 @@ fun ConvocatoriaScreen(
                         }
 
                         if (isSummoned) {
+
                             Text(
                                 txtConvocado,
                                 style =
@@ -796,7 +902,9 @@ fun ConvocatoriaScreen(
                                 color =
                                 containerColor
                             )
+
                         } else {
+
                             Text(
                                 reasonsMap[
                                     player.id.toString()
@@ -818,7 +926,8 @@ fun ConvocatoriaScreen(
             )
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                Modifier.fillMaxWidth(),
                 horizontalArrangement =
                 Arrangement.spacedBy(8.dp)
             ) {
@@ -828,14 +937,19 @@ fun ConvocatoriaScreen(
 
                         if (match.isConvocatoriaSaved) {
 
-                            isEditMode = false
+                            /*
+                             * Cancelamos la edición y recuperamos
+                             * exactamente la convocatoria de Firestore.
+                             */
+                            shouldSaveDraft = false
 
                             summonedIds =
                                 match.summonedPlayers.toSet()
 
                             reasonsMap =
-                                match.unsummonedReasons
-                                    .toMutableMap()
+                                match.unsummonedReasons.toMutableMap()
+
+                            isEditMode = false
 
                         } else {
 
@@ -843,12 +957,13 @@ fun ConvocatoriaScreen(
                             navController.popBackStack()
                         }
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier =
+                    Modifier.weight(1f),
                     colors =
                     ButtonDefaults.buttonColors(
-                        containerColor =
-                        com.example.entrenamientos.ui.theme.AttendanceRed
-                    )
+                        containerColor = AttendanceRed
+                    ),
+                    enabled = !isSaving
                 ) {
                     Text(
                         "Cancelar",
@@ -859,23 +974,25 @@ fun ConvocatoriaScreen(
                 Button(
                     onClick = {
 
+                        if (isSaving) return@Button
+
                         when {
 
                             summonedIds.size > maxPlayers -> {
 
-                                android.widget.Toast.makeText(
+                                Toast.makeText(
                                     context,
                                     "Máximo $maxPlayers $txtJugadoras en esta categoría",
-                                    android.widget.Toast.LENGTH_LONG
+                                    Toast.LENGTH_LONG
                                 ).show()
                             }
 
                             summonedIds.size < absoluteMinPlayers -> {
 
-                                android.widget.Toast.makeText(
+                                Toast.makeText(
                                     context,
                                     "Debes convocar mínimo $absoluteMinPlayers $txtJugadoras",
-                                    android.widget.Toast.LENGTH_LONG
+                                    Toast.LENGTH_LONG
                                 ).show()
                             }
 
@@ -887,28 +1004,32 @@ fun ConvocatoriaScreen(
 
                             summonedIds.size < minPlayers -> {
 
-                                android.widget.Toast.makeText(
+                                Toast.makeText(
                                     context,
                                     "Debes convocar mínimo $minPlayers $txtJugadoras",
-                                    android.widget.Toast.LENGTH_LONG
+                                    Toast.LENGTH_LONG
                                 ).show()
                             }
 
                             else -> {
-                                saveMatchAction()
+                                saveConvocatoria()
                             }
                         }
-
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier =
+                    Modifier.weight(1f),
                     colors =
                     ButtonDefaults.buttonColors(
-                        containerColor =
-                        com.example.entrenamientos.ui.theme.AttendanceGreen
-                    )
+                        containerColor = AttendanceGreen
+                    ),
+                    enabled = !isSaving
                 ) {
                     Text(
-                        "Guardar",
+                        if (isSaving) {
+                            "Guardando..."
+                        } else {
+                            "Guardar"
+                        },
                         color = Color.Black
                     )
                 }
@@ -924,7 +1045,9 @@ fun ConvocatoriaScreen(
 
         AlertDialog(
             onDismissRequest = {
-                showMinPlayersWarning = false
+                if (!isSaving) {
+                    showMinPlayersWarning = false
+                }
             },
 
             title = {
@@ -960,15 +1083,16 @@ fun ConvocatoriaScreen(
 
                     Button(
                         onClick = {
+
                             showMinPlayersWarning = false
                         },
                         modifier =
                         Modifier.weight(1f),
                         colors =
                         ButtonDefaults.buttonColors(
-                            containerColor =
-                            com.example.entrenamientos.ui.theme.AttendanceRed
-                        )
+                            containerColor = AttendanceRed
+                        ),
+                        enabled = !isSaving
                     ) {
                         Text(
                             "Revisar",
@@ -979,9 +1103,9 @@ fun ConvocatoriaScreen(
                     Button(
                         onClick = {
 
-                            showMinPlayersWarning = false
-                            saveMatchAction()
-
+                            if (!isSaving) {
+                                saveConvocatoria()
+                            }
                         },
                         modifier =
                         Modifier.weight(1f),
@@ -989,10 +1113,15 @@ fun ConvocatoriaScreen(
                         ButtonDefaults.buttonColors(
                             containerColor =
                             Color(0xFFFF9800)
-                        )
+                        ),
+                        enabled = !isSaving
                     ) {
                         Text(
-                            "Continuar",
+                            if (isSaving) {
+                                "Guardando..."
+                            } else {
+                                "Continuar"
+                            },
                             color = Color.White
                         )
                     }
@@ -1009,7 +1138,9 @@ fun ConvocatoriaScreen(
 
         AlertDialog(
             onDismissRequest = {
-                playerToUnsummon = null
+                if (!isSaving) {
+                    playerToUnsummon = null
+                }
             },
 
             properties =
@@ -1106,20 +1237,22 @@ fun ConvocatoriaScreen(
                         Button(
                             onClick = {
 
+                                val player =
+                                    playerToUnsummon
+                                        ?: return@Button
+
                                 reasonsMap =
                                     reasonsMap.toMutableMap().apply {
                                         put(
-                                            playerToUnsummon!!.id.toString(),
+                                            player.id.toString(),
                                             reason
                                         )
                                     }
 
                                 summonedIds =
-                                    summonedIds -
-                                            playerToUnsummon!!.id
+                                    summonedIds - player.id
 
-                                playerToUnsummon =
-                                    null
+                                playerToUnsummon = null
                             },
 
                             modifier =
@@ -1129,16 +1262,18 @@ fun ConvocatoriaScreen(
 
                             colors =
                             ButtonDefaults.buttonColors(
-                                containerColor =
-                                com.example.entrenamientos.ui.theme.AttendanceRed
-                            )
+                                containerColor = AttendanceRed
+                            ),
+
+                            enabled = !isSaving
                         ) {
 
                             Text(
                                 text = reason,
                                 color = Color.White,
                                 fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight =
+                                FontWeight.Bold
                             )
                         }
                     }
@@ -1148,10 +1283,12 @@ fun ConvocatoriaScreen(
             confirmButton = {},
 
             dismissButton = {
+
                 TextButton(
                     onClick = {
                         playerToUnsummon = null
-                    }
+                    },
+                    enabled = !isSaving
                 ) {
                     Text(
                         "Cancelar",
@@ -1163,7 +1300,12 @@ fun ConvocatoriaScreen(
     }
 }
 
-fun Modifier.verticalScrollShadow(
+// ================================================================
+// SOMBRA DEL SCROLL EXCLUSIVA DE CONVOCATORIA
+// Evita conflicto con QuintetosScreen.kt
+// ================================================================
+
+fun Modifier.convocatoriaVerticalScrollShadow(
     listState: LazyListState
 ) = this.drawWithContent {
 
