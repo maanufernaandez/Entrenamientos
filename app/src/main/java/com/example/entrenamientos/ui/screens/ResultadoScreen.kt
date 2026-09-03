@@ -12,15 +12,18 @@ import com.example.entrenamientos.ui.BasketViewModel
 @Composable
 fun ResultadoScreen(viewModel: BasketViewModel, navController: NavController) {
     val selectedDateStr by viewModel.selectedDate.collectAsState()
+    val teamYear by viewModel.selectedTeamYear.collectAsState()
     val date = java.time.LocalDate.parse(selectedDateStr)
-    val match = viewModel.getMatchForDate(date) ?: return
+
+    val allMatches by viewModel.matches.collectAsState()
+    val match = allMatches.find { it.date == selectedDateStr && it.teamYear == teamYear } ?: return
 
     var resLocal by remember { mutableStateOf(match.resultLocal?.toString() ?: "") }
     var resVisitor by remember { mutableStateOf(match.resultVisitor?.toString() ?: "") }
     var ftMade by remember { mutableStateOf(match.ftMade.toString()) }
     var ftAttempted by remember { mutableStateOf(match.ftAttempted.toString()) }
 
-    var observaciones by remember { mutableStateOf(match.observations) }
+    var observaciones by remember { mutableStateOf(match.observations ?: "") }
 
     androidx.activity.compose.BackHandler {
         navController.popBackStack()

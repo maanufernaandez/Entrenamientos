@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -30,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,14 +55,32 @@ fun CalendarScreen(
     viewModel: BasketViewModel = hiltViewModel(),
     navController: NavController
 ) {
-    var currentMonth by remember { mutableStateOf(java.time.YearMonth.of(2026, 9)) }
-    val minMonth = java.time.YearMonth.of(2026, 9)
-    val maxMonth = java.time.YearMonth.of(2027, 5)
+    val teamsList by viewModel.teams.collectAsState()
 
+    // Calculamos el mes mínimo dinámicamente según la fecha de inicio más temprana de los equipos
+    val minMonth = remember(teamsList) {
+        val earliest = teamsList.mapNotNull { team ->
+            team.firstTrainingDate.takeIf { it.isNotBlank() }?.let {
+                try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
+            }
+        }.minOrNull() ?: java.time.LocalDate.of(2026, 9, 1)
+        java.time.YearMonth.from(earliest)
+    }
+
+    val maxMonth = java.time.YearMonth.of(2027, 7) // Ampliado hasta Julio de 2027 por seguridad
+
+    var currentMonth by remember { mutableStateOf(java.time.YearMonth.of(2026, 9)) }
     var showDayDialog by remember { mutableStateOf(false) }
     var clickedDate by remember { mutableStateOf<java.time.LocalDate?>(null) }
 
     val schedules by viewModel.schedules.collectAsState()
+
+    // Si cambias el mes mínimo en ajustes a uno posterior al que estás viendo, se ajusta solo
+    LaunchedEffect(minMonth) {
+        if (currentMonth.isBefore(minMonth)) {
+            currentMonth = minMonth
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -160,14 +180,25 @@ fun DayCell(
     val dayValue = date.dayOfWeek.value
     val teamsList by viewModel.teams.collectAsState()
 
+    // 1. Buscamos la fecha de inicio de temporada más temprana entre todos los equipos
+    val earliestTrainingDate = teamsList.mapNotNull { team ->
+        team.firstTrainingDate.takeIf { it.isNotBlank() }?.let {
+            try { java.time.LocalDate.parse(it) } catch (_: Exception) { null }
+        }
+    }.minOrNull() ?: java.time.LocalDate.of(2026, 9, 1)
+
+    val isBeforeSeason = date.isBefore(earliestTrainingDate)
     val isPastDay = date.isBefore(java.time.LocalDate.now())
+
+    // 2. Aplicamos el color de fondo dando prioridad al sombreado gris si es antes de la temporada
     val cellBackgroundColor = when {
+        isBeforeSeason -> Color.LightGray.copy(alpha = 0.4f)
         isHoliday -> Color(0xFFFFEBEE)
         isPastDay -> Color(0xFFFFF5F5)
         else -> Color.White
     }
 
-    val daySchedules = if (isHoliday) {
+    val daySchedules = if (isHoliday || isBeforeSeason) {
         emptyList()
     } else {
         schedules.filter { schedule ->
@@ -191,15 +222,15 @@ fun DayCell(
         modifier = Modifier
             .fillMaxSize()
             .background(cellBackgroundColor)
-            .clickable(enabled = daySchedules.isNotEmpty() || matchesOnDay.isNotEmpty()) { onClick() }
+            .clickable(enabled = (!isBeforeSeason) && (daySchedules.isNotEmpty() || matchesOnDay.isNotEmpty())) { onClick() }
             .padding(4.dp)
     ) {
         Text(
             text = date.dayOfMonth.toString(),
             modifier = Modifier.align(Alignment.TopStart),
             style = MaterialTheme.typography.bodyLarge,
-            color = if (isHoliday) Color.Red else Color.Unspecified,
-            fontWeight = if (isHoliday) FontWeight.ExtraBold else FontWeight.SemiBold
+            color = if (isHoliday && !isBeforeSeason) Color.Red else if (isBeforeSeason) Color.Gray else Color.Unspecified,
+            fontWeight = if (isHoliday && !isBeforeSeason) FontWeight.ExtraBold else FontWeight.SemiBold
         )
 
         Column(
@@ -207,26 +238,25 @@ fun DayCell(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            if (matchesOnDay.isNotEmpty()) {
+            if (matchesOnDay.isNotEmpty() && !isBeforeSeason) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     matchesOnDay.forEach { m ->
-                        val circleColor = viewModel.getMatchColor(m)
+                        val matchTeam = teamsList.find { it.year == m.teamYear }
+                        val circleColor = matchTeam?.colorHex?.let {
+                            try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
+                        } ?: Color.Gray
+
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(24.dp)
                                 .clip(CircleShape)
                                 .background(circleColor),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (m.isLocal) "L" else "V",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            // Círculo de partido vacío
                         }
                     }
                 }
@@ -263,12 +293,11 @@ fun DayOptionsDialog(
     onDismiss: () -> Unit
 ) {
     val teams = viewModel.getTeamsForDate(date)
-    val match = viewModel.getMatchForDate(date)
-    val hasMatch = match != null
+    val allMatches by viewModel.matches.collectAsState()
+    val dayMatches = allMatches.filter { it.date == date.toString() }
     val teamsList by viewModel.teams.collectAsState()
 
     val dayOfWeek = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
-    val monthNumber = date.monthValue
     val dayNumber = date.dayOfMonth
     val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
 
@@ -293,58 +322,35 @@ fun DayOptionsDialog(
             shape = MaterialTheme.shapes.medium
         ) {
             Column(
-                modifier = Modifier.padding(uniformSpace),
+                modifier = Modifier
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                    .padding(uniformSpace),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (hasMatch && match != null) {
-                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(6.dp * scale)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(iconSize), tint = Color.Black)
-                            Spacer(Modifier.width(8.dp * scale))
-                            Text(
-                                text = "$dayOfWeek $dayNumber/$monthNumber - ${match.time}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontSize = fontSizeTitle,
-                                color = Color.Black,
-                                fontWeight = FontWeight.Normal
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(iconSize), tint = Color.Black)
-                            Spacer(Modifier.width(8.dp * scale))
-                            Text(
-                                text = "Polideportivo ${match.location}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontSize = fontSizeTitle,
-                                color = Color.Black,
-                                fontWeight = FontWeight.Normal
-                            )
-                        }
-                    }
-                } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(iconSize), tint = Color.Black)
-                        Spacer(Modifier.width(8.dp * scale))
-                        Text(
-                            text = "$dayOfWeek $dayNumber de $monthName",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontSize = fontSizeTitle,
-                            color = Color.Black,
-                            fontWeight = FontWeight.Normal
-                        )
-                    }
+                // 1. ENCABEZADO GLOBAL (Solo fecha)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(iconSize), tint = Color.Black)
+                    Spacer(Modifier.width(8.dp * scale))
+                    Text(
+                        text = "$dayOfWeek $dayNumber de $monthName",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontSize = fontSizeTitle,
+                        color = Color.Black,
+                        fontWeight = FontWeight.Normal
+                    )
                 }
 
-                if (teams.isNotEmpty() || hasMatch) {
+                if (teams.isNotEmpty() || dayMatches.isNotEmpty()) {
                     Spacer(Modifier.height(uniformSpace))
                     HorizontalDivider(color = Color.Black, thickness = 1.dp)
                     Spacer(Modifier.height(uniformSpace))
                 }
 
+                // 2. SECCIÓN ENTRENAMIENTOS
                 if (teams.isNotEmpty()) {
                     teams.forEachIndexed { index, teamYearLoop ->
                         if (index > 0) {
@@ -397,77 +403,109 @@ fun DayOptionsDialog(
                     }
                 }
 
-                if (hasMatch && match != null) {
-                    if (teams.isNotEmpty()) {
-                        Spacer(Modifier.height(uniformSpace))
-                        HorizontalDivider(color = Color.Black, thickness = 1.dp)
-                        Spacer(Modifier.height(uniformSpace))
-                    }
+                // 3. SECCIÓN PARTIDOS
+                if (dayMatches.isNotEmpty()) {
+                    dayMatches.forEachIndexed { index, match ->
+                        if (teams.isNotEmpty() || index > 0) {
+                            Spacer(Modifier.height(uniformSpace))
+                            HorizontalDivider(color = Color.Black, thickness = 1.dp)
+                            Spacer(Modifier.height(uniformSpace))
+                        }
 
-                    viewModel.setSelectedTeamYear(match.teamYear)
+                        val matchTeam = teamsList.find { it.year == match.teamYear }
+                        val matchTeamNameBase = matchTeam?.name ?: "Equipo ${match.teamYear}"
 
-                    val matchTeam = teamsList.find { it.year == match.teamYear }
-                    val matchTeamNameBase = matchTeam?.name ?: "Equipo ${match.teamYear}"
+                        val matchTeamDisplayName = if (match.isLocal) {
+                            "$matchTeamNameBase vs ${match.opponent}"
+                        } else {
+                            "${match.opponent} vs $matchTeamNameBase"
+                        }
 
-                    val matchTeamDisplayName = if (match.isLocal) {
-                        "$matchTeamNameBase vs ${match.opponent}"
-                    } else {
-                        "${match.opponent} vs $matchTeamNameBase"
-                    }
+                        val matchTeamColor = matchTeam?.colorHex?.let {
+                            try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.DarkGray }
+                        } ?: Color.DarkGray
 
-                    val matchTeamColor = matchTeam?.colorHex?.let {
-                        try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.DarkGray }
-                    } ?: Color.DarkGray
+                        // Encabezado del partido individual: Hora y Polideportivo
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(iconSize), tint = Color.Black)
+                            Spacer(Modifier.width(8.dp * scale))
+                            Text(
+                                text = "${match.time} - Polid. ${match.location}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontSize = fontSizeTitle,
+                                color = Color.Black,
+                                fontWeight = FontWeight.Normal
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp * scale))
 
-                    Text(
-                        text = matchTeamDisplayName,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontSize = fontSizeTeam,
-                        color = matchTeamColor,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(Modifier.height(uniformSpace))
-
-                    val (canMake, _) = viewModel.canMakeConvocatoria(date)
-                    val isConvocatoriaEnabled = canMake || match.isConvocatoriaSaved
-
-                    val matchButtonModifier = Modifier.fillMaxWidth().height(btnHeight)
-
-                    if (!isConvocatoriaEnabled) {
                         Text(
-                            text = "Rellena todas las asistencias anteriores para continuar",
-                            color = Color.Red,
-                            fontSize = (13 * scale).sp,
+                            text = matchTeamDisplayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = fontSizeTeam,
+                            color = matchTeamColor,
                             fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = btnInternalSpace)
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
                         )
-                    }
 
-                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(btnInternalSpace)) {
-                        Button(
-                            onClick = { viewModel.setSelectedDate(date.toString()); onDismiss(); navController.navigate("convocatoria") },
-                            enabled = isConvocatoriaEnabled,
-                            modifier = matchButtonModifier,
-                            colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
-                        ) { Text(if (match.isConvocatoriaSaved) "Ver Convocatoria" else "Convocatoria", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
+                        Spacer(Modifier.height(uniformSpace))
 
-                        Button(
-                            onClick = { viewModel.setSelectedDate(date.toString()); onDismiss(); navController.navigate("quintetos") },
-                            enabled = match.isConvocatoriaSaved,
-                            modifier = matchButtonModifier,
-                            colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
-                        ) { Text("Quintetos", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
+                        // Obtenemos la asistencia del equipo específico de este partido
+                        val teamAttendances by viewModel.getAllAttendancesByTeam(match.teamYear).collectAsState(initial = emptyList())
+                        val (canMake, _) = viewModel.canMakeConvocatoria(date, match.teamYear, teamAttendances)
+                        val isConvocatoriaEnabled = canMake || match.isConvocatoriaSaved
 
-                        Button(
-                            onClick = { viewModel.setSelectedDate(date.toString()); onDismiss(); navController.navigate("resultado") },
-                            enabled = match.isConvocatoriaSaved,
-                            modifier = matchButtonModifier,
-                            colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
-                        ) { Text(if (match.resultLocal != null) "Ver Resultado" else "Resultado", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
+                        val matchButtonModifier = Modifier.fillMaxWidth().height(btnHeight)
+
+                        if (!isConvocatoriaEnabled) {
+                            Text(
+                                text = "Rellena todas las asistencias anteriores para continuar",
+                                color = Color.Red,
+                                fontSize = (13 * scale).sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = btnInternalSpace)
+                            )
+                        }
+
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(btnInternalSpace)) {
+                            Button(
+                                onClick = {
+                                    viewModel.setSelectedTeamYear(match.teamYear)
+                                    viewModel.setSelectedDate(date.toString())
+                                    onDismiss()
+                                    navController.navigate("convocatoria")
+                                },
+                                enabled = isConvocatoriaEnabled,
+                                modifier = matchButtonModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
+                            ) { Text(if (match.isConvocatoriaSaved) "Ver Convocatoria" else "Convocatoria", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
+
+                            Button(
+                                onClick = {
+                                    viewModel.setSelectedTeamYear(match.teamYear)
+                                    viewModel.setSelectedDate(date.toString())
+                                    onDismiss()
+                                    navController.navigate("quintetos")
+                                },
+                                enabled = match.isConvocatoriaSaved,
+                                modifier = matchButtonModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
+                            ) { Text("Quintetos", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
+
+                            Button(
+                                onClick = {
+                                    viewModel.setSelectedTeamYear(match.teamYear)
+                                    viewModel.setSelectedDate(date.toString())
+                                    onDismiss()
+                                    navController.navigate("resultado")
+                                },
+                                enabled = match.isConvocatoriaSaved,
+                                modifier = matchButtonModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray)
+                            ) { Text(if (match.resultLocal != null) "Ver Resultado" else "Resultado", color = Color.White, maxLines = 1, fontSize = fontSizeBtn) }
+                        }
                     }
                 }
 

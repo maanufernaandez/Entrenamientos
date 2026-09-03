@@ -327,10 +327,7 @@ class BasketViewModel @Inject constructor(
     }
 
     // --- VALIDACIÓN DE CONVOCATORIA ---
-    fun canMakeConvocatoria(matchDate: java.time.LocalDate): Pair<Boolean, String?> {
-        val attendances = _currentTeamAttendances.value
-        val teamYear = _selectedTeamYear.value
-
+    fun canMakeConvocatoria(matchDate: java.time.LocalDate, teamYear: Int, attendances: List<Attendance>): Pair<Boolean, String?> {
         val seasonStartYear = if (matchDate.monthValue >= 9) matchDate.year else matchDate.year - 1
         val seasonStart = java.time.LocalDate.of(seasonStartYear, 9, 1)
 
@@ -350,12 +347,14 @@ class BasketViewModel @Inject constructor(
 
     // --- BORRADOR DE CONVOCATORIA ---
     var draftMatchDate: String? = null
+    var draftTeamYear: Int? = null
     var draftSummonedIds: Set<Long>? = null
     var draftReasonsMap: Map<Long, String>? = null
     var draftIsEditMode: Boolean? = null
 
-    fun saveDraftConvocatoria(date: String, summoned: Set<Long>, reasons: Map<Long, String>, isEdit: Boolean) {
+    fun saveDraftConvocatoria(date: String, teamYear: Int, summoned: Set<Long>, reasons: Map<Long, String>, isEdit: Boolean) {
         draftMatchDate = date
+        draftTeamYear = teamYear
         draftSummonedIds = summoned
         draftReasonsMap = reasons
         draftIsEditMode = isEdit
@@ -363,6 +362,7 @@ class BasketViewModel @Inject constructor(
 
     fun clearDraftConvocatoria() {
         draftMatchDate = null
+        draftTeamYear = null
         draftSummonedIds = null
         draftReasonsMap = null
         draftIsEditMode = null

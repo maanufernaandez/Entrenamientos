@@ -67,11 +67,23 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     val teamsList by viewModel.teams.collectAsState()
     val selectedTeam by viewModel.selectedTeamYear.collectAsState()
 
-    androidx.compose.runtime.LaunchedEffect(teamsList) {
-        if (teamsList.isNotEmpty() && teamsList.none { it.year == selectedTeam }) {
-            viewModel.setSelectedTeamYear(teamsList.first().year)
+    // Lógica para ordenar los equipos desde Senior hasta Pre-Benjamin 3x3
+    val categoryOrder = listOf(
+        "Senior", "Junior", "Cadete", "Infantil", "Preinfantil",
+        "Minibasket", "PreMinibasket", "Benjamin 5x5", "Benjamin 3x3", "Pre-Benjamin 3x3"
+    )
+    val sortedTeamsList = remember(teamsList) {
+        teamsList.sortedWith(compareBy({ team ->
+            val idx = categoryOrder.indexOfFirst { team.categoryYear.startsWith(it) }
+            if (idx == -1) 99 else idx
+        }, { it.name }))
+    }
+
+    androidx.compose.runtime.LaunchedEffect(sortedTeamsList) {
+        if (sortedTeamsList.isNotEmpty() && sortedTeamsList.none { it.year == selectedTeam }) {
+            viewModel.setSelectedTeamYear(sortedTeamsList.first().year)
         }
-        if (teamsList.isEmpty()) {
+        if (sortedTeamsList.isEmpty()) {
             activeTab = "EQUIPOS"
         }
     }
@@ -126,7 +138,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
     val selectedBlue = Color(0xFF2196F3)
     val unselectedLightBlue = Color(0xFFE3F2FD)
 
-    val currentTeamObj = teamsList.find { it.year == selectedTeam }
+    val currentTeamObj = sortedTeamsList.find { it.year == selectedTeam }
     val trackMatches = currentTeamObj?.trackMatches ?: true
     val isFemale = currentTeamObj?.gender == "F"
     val labelJugadores = if (isFemale) "Jugadoras" else "Jugadores"
@@ -143,7 +155,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
         Text("AJUSTES", style = MaterialTheme.typography.headlineMedium.copy(fontSize = sp(24)))
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (teamsList.isEmpty()) {
+        if (sortedTeamsList.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Button(
                     onClick = { teamToEdit = null; showTeamDialog = true },
@@ -158,7 +170,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                items(teamsList) { team ->
+                items(sortedTeamsList) { team ->
                     val teamColor = team.colorHex.let {
                         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
                     }
@@ -254,14 +266,23 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     val cellHeight = (42 * scale).dp
 
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(teamsList) { team ->
+                        items(sortedTeamsList) { team ->
                             val teamColor = try { Color(android.graphics.Color.parseColor(team.colorHex)) } catch (_: Exception) { Color.Gray }
                             val genderStr = when (team.gender) {
                                 "M" -> "Masculino"
                                 "F" -> "Femenino"
                                 else -> "Mixto"
                             }
-                            val subtitle = "Categoría: ${team.categoryYear} $genderStr"
+
+                            val catSplit = team.categoryYear.split(" ")
+                            val subtitle = if (catSplit.size >= 2 && (catSplit.last() == "1ª" || catSplit.last() == "2ª")) {
+                                val baseCat = catSplit.dropLast(1).joinToString(" ")
+                                "Categoría: $baseCat $genderStr ${catSplit.last()}"
+                            } else if (team.categoryYear.isNotBlank()) {
+                                "Categoría: ${team.categoryYear} $genderStr"
+                            } else {
+                                "Categoría: $genderStr"
+                            }
 
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -356,7 +377,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                 }
                 "HORARIOS" -> {
                     var firstTrainingDateInput by remember(selectedTeam) {
-                        mutableStateOf(teamsList.find { it.year == selectedTeam }?.firstTrainingDate ?: "2026-09-01")
+                        mutableStateOf(sortedTeamsList.find { it.year == selectedTeam }?.firstTrainingDate ?: "2026-09-01")
                     }
 
                     val teamDaysUsed = teamSchedules.map { it.dayOfWeek }
@@ -532,8 +553,28 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
             "PreMinibasket", "Minibasket", "Preinfantil",
             "Infantil", "Cadete", "Junior", "Senior"
         )
-        var eCategory by remember { mutableStateOf(teamToEdit?.categoryYear?.takeIf { it.isNotBlank() } ?: categories.first()) }
+
+        var initialCat = categories.first()
+        var initialDiv = "1ª"
+        teamToEdit?.categoryYear?.let { savedCat ->
+            val split = savedCat.split(" ")
+            if (split.size >= 2 && (split.last() == "1ª" || split.last() == "2ª")) {
+                initialDiv = split.last()
+                initialCat = split.dropLast(1).joinToString(" ")
+            } else if (savedCat.isNotBlank()) {
+                initialCat = savedCat
+            }
+        }
+        if (!categories.contains(initialCat)) {
+            initialCat = categories.first()
+        }
+
+        var eCategory by remember { mutableStateOf(initialCat) }
+        var eDivision by remember { mutableStateOf(initialDiv) }
         var expandedCategory by remember { mutableStateOf(false) }
+        var expandedDivision by remember { mutableStateOf(false) }
+
+        val requiresDivision = eCategory in listOf("PreMinibasket", "Minibasket", "Preinfantil", "Infantil", "Cadete", "Junior", "Senior")
 
         var eGender by remember { mutableStateOf(teamToEdit?.gender ?: "M") }
         var eColor by remember { mutableStateOf(teamToEdit?.colorHex ?: "#2196F3") }
@@ -551,32 +592,64 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                     OutlinedTextField(value = eName, onValueChange = { eName = it }, label = { Text("Nombre completo del equipo") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     Spacer(Modifier.height(8.dp))
 
-                    // Selector de categoría desplegable debajo del nombre y encima de la abreviatura
-                    ExposedDropdownMenuBox(
-                        expanded = expandedCategory,
-                        onExpandedChange = { expandedCategory = !expandedCategory },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedTextField(
-                            value = eCategory,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Categoría") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth()
-                        )
-                        ExposedDropdownMenu(
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ExposedDropdownMenuBox(
                             expanded = expandedCategory,
-                            onDismissRequest = { expandedCategory = false }
+                            onExpandedChange = { expandedCategory = !expandedCategory },
+                            modifier = Modifier.weight(if (requiresDivision) 0.6f else 1f)
                         ) {
-                            categories.forEach { category ->
-                                DropdownMenuItem(
-                                    text = { Text(category) },
-                                    onClick = {
-                                        eCategory = category
-                                        expandedCategory = false
-                                    }
+                            OutlinedTextField(
+                                value = eCategory,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Categoría") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expandedCategory,
+                                onDismissRequest = { expandedCategory = false }
+                            ) {
+                                categories.forEach { category ->
+                                    DropdownMenuItem(
+                                        text = { Text(category) },
+                                        onClick = {
+                                            eCategory = category
+                                            expandedCategory = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (requiresDivision) {
+                            ExposedDropdownMenuBox(
+                                expanded = expandedDivision,
+                                onExpandedChange = { expandedDivision = !expandedDivision },
+                                modifier = Modifier.weight(0.4f)
+                            ) {
+                                OutlinedTextField(
+                                    value = eDivision,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("División") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDivision) },
+                                    modifier = Modifier.menuAnchor().fillMaxWidth()
                                 )
+                                ExposedDropdownMenu(
+                                    expanded = expandedDivision,
+                                    onDismissRequest = { expandedDivision = false }
+                                ) {
+                                    listOf("1ª", "2ª").forEach { div ->
+                                        DropdownMenuItem(
+                                            text = { Text(div) },
+                                            onClick = {
+                                                eDivision = div
+                                                expandedDivision = false
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -637,10 +710,11 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
                         if (eName.isBlank() || eShortName.isBlank()) {
                             android.widget.Toast.makeText(context, "El nombre y la abreviatura son obligatorios", android.widget.Toast.LENGTH_SHORT).show()
                         } else {
+                            val finalCategory = if (requiresDivision) "$eCategory $eDivision" else eCategory
                             if (isEdit) {
-                                viewModel.updateTeamData(teamToEdit!!.year, eName, eShortName, eGender, eCategory, eColor, eTrackMatches)
+                                viewModel.updateTeamData(teamToEdit!!.year, eName, eShortName, eGender, finalCategory, eColor, eTrackMatches)
                             } else {
-                                viewModel.addTeam(eName, eShortName, eGender, eCategory, eColor, eTrackMatches)
+                                viewModel.addTeam(eName, eShortName, eGender, finalCategory, eColor, eTrackMatches)
                             }
                             showTeamDialog = false
                             teamToEdit = null
@@ -842,7 +916,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel()) {
         AlertDialog(
             onDismissRequest = { playerToDelete = null },
             title = { Text("Eliminar Jugador/a", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
-            text = { Text("¿Estás seguro de que quieres eliminar este/a jugador/a?", textAlign = TextAlign.Center) },
+            text = { Text("¿Estás seguro de que quieres eliminar a este/a jugador/a?", textAlign = TextAlign.Center) },
             confirmButton = {},
             dismissButton = {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

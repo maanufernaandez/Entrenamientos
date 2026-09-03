@@ -3,35 +3,20 @@ package com.example.entrenamientos.ui.screens
 import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -44,24 +29,42 @@ import com.example.entrenamientos.ui.BasketViewModel
 @Composable
 fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController) {
     val selectedDateStr by viewModel.selectedDate.collectAsState()
+    val teamYear by viewModel.selectedTeamYear.collectAsState()
     val date = java.time.LocalDate.parse(selectedDateStr)
 
     val allMatches by viewModel.matches.collectAsState()
-    val match = allMatches.find { it.date == selectedDateStr } ?: return
+    val match = allMatches.find { it.date == selectedDateStr && it.teamYear == teamYear } ?: return
 
     val teamsList by viewModel.teams.collectAsState()
     val matchTeam = teamsList.find { it.year == match.teamYear }
     val isFemale = matchTeam?.gender == "F"
+    val category = matchTeam?.categoryYear ?: ""
+
+    val isSeniorCategory = category.startsWith("Cadete") || category.startsWith("Junior") || category.startsWith("Senior")
+    val isMini = category.startsWith("Minibasket") || category.startsWith("PreMinibasket") || category.startsWith("Benjamin 5x5")
+    val is3x3 = category.startsWith("Benjamin 3x3") || category.startsWith("Pre-Benjamin 3x3")
+
+    val minPlayers = when {
+        is3x3 -> 4
+        isSeniorCategory -> 5
+        else -> 8
+    }
+
+    val maxPlayers = when {
+        isMini -> 15
+        else -> 12
+    }
 
     val txtConvocadas = if (isFemale) "CONVOCADAS" else "CONVOCADOS"
     val txtDesconvocadas = if (isFemale) "DESCONVOCADAS" else "DESCONVOCADOS"
     val txtSeleccionadas = if (isFemale) "Seleccionadas" else "Seleccionados"
     val txtJugadoras = if (isFemale) "jugadoras" else "jugadores"
+    val txtConvocado = if (isFemale) "Convocada" else "Convocado"
 
     val players by viewModel.getPlayersForTeam(match.teamYear).collectAsState(initial = emptyList())
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    val hasDraft = viewModel.draftMatchDate == selectedDateStr
+    val hasDraft = viewModel.draftMatchDate == selectedDateStr && viewModel.draftTeamYear == teamYear
 
     var isEditMode by remember(match) {
         mutableStateOf(if (hasDraft) viewModel.draftIsEditMode ?: !match.isConvocatoriaSaved else !match.isConvocatoriaSaved)
@@ -82,15 +85,18 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
     }
 
     var shouldSaveDraft by remember { mutableStateOf(true) }
+    var showMinPlayersWarning by remember { mutableStateOf(false) }
+
     val currentSummonedIds = androidx.compose.runtime.rememberUpdatedState(summonedIds)
     val currentReasonsMap = androidx.compose.runtime.rememberUpdatedState(reasonsMap)
     val currentIsEditMode = androidx.compose.runtime.rememberUpdatedState(isEditMode)
 
-    androidx.compose.runtime.DisposableEffect(selectedDateStr) {
+    androidx.compose.runtime.DisposableEffect(selectedDateStr, teamYear) {
         onDispose {
             if (shouldSaveDraft) {
                 viewModel.saveDraftConvocatoria(
                     selectedDateStr,
+                    teamYear,
                     currentSummonedIds.value,
                     currentReasonsMap.value.toMap(),
                     currentIsEditMode.value
@@ -104,6 +110,17 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
     androidx.activity.compose.BackHandler {
         shouldSaveDraft = false
         navController.popBackStack()
+    }
+
+    val saveMatchAction = {
+        shouldSaveDraft = false
+        val updatedMatch = match.copy(
+            isConvocatoriaSaved = true,
+            summonedPlayers = summonedIds.toList(),
+            unsummonedReasons = reasonsMap.toMap()
+        )
+        viewModel.addOrUpdateMatch(updatedMatch)
+        isEditMode = false
     }
 
     var playerToUnsummon by remember { mutableStateOf<com.example.entrenamientos.data.Player?>(null) }
@@ -127,12 +144,26 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
         Spacer(modifier = Modifier.height(16.dp))
 
         if (!isEditMode) {
+            if (minPlayers == 8 && match.summonedPlayers.size in 5..7) {
+                Text(
+                    text = "⚠️ No dispones del número mínimo de $txtJugadoras para cumplir con la normativa.",
+                    color = com.example.entrenamientos.ui.theme.AttendanceRed,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
             val convocadas = sortedPlayers.filter { match.summonedPlayers.contains(it.id) }
             val desconvocadas = sortedPlayers.filter { !match.summonedPlayers.contains(it.id) }
+            val listStateRead = rememberLazyListState()
 
-            LazyColumn(modifier = Modifier.weight(1f)) {
+            LazyColumn(
+                state = listStateRead,
+                modifier = Modifier.weight(1f).verticalScrollShadow(listStateRead)
+            ) {
                 item {
-                    Text("- $txtConvocadas (${convocadas.size}/12)", style = MaterialTheme.typography.titleMedium, color = com.example.entrenamientos.ui.theme.SuccessGreen)
+                    Text("- $txtConvocadas (${convocadas.size}/$maxPlayers)", style = MaterialTheme.typography.titleMedium, color = com.example.entrenamientos.ui.theme.SuccessGreen)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 items(convocadas) { p ->
@@ -220,9 +251,11 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                 Button(
                     onClick = {
                         shouldSaveDraft = false
+                        summonedIds = emptySet()
+                        reasonsMap = mutableMapOf()
                         val resetMatch = match.copy(isConvocatoriaSaved = false, summonedPlayers = emptyList(), unsummonedReasons = emptyMap())
                         viewModel.addOrUpdateMatch(resetMatch)
-                        navController.popBackStack()
+                        isEditMode = true
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
                     modifier = Modifier.fillMaxWidth()
@@ -230,10 +263,15 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
             }
 
         } else {
-            Text("$txtSeleccionadas: ${summonedIds.size} (Mín. 8 - Máx. 12)", style = MaterialTheme.typography.titleMedium)
+            Text("$txtSeleccionadas: ${summonedIds.size} (Mín. $minPlayers - Máx. $maxPlayers)", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
-            LazyColumn(modifier = Modifier.weight(1f)) {
+            val listStateEdit = rememberLazyListState()
+
+            LazyColumn(
+                state = listStateEdit,
+                modifier = Modifier.weight(1f).verticalScrollShadow(listStateEdit)
+            ) {
                 items(sortedPlayers) { player ->
                     val isSummoned = summonedIds.contains(player.id)
                     val containerColor = if (isSummoned) com.example.entrenamientos.ui.theme.SuccessGreen else com.example.entrenamientos.ui.theme.AttendanceRed
@@ -286,7 +324,7 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
                         }
 
                         if (isSummoned) {
-                            Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = containerColor)
+                            Text(txtConvocado, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = containerColor)
                         } else {
                             Text(reasonsMap[player.id] ?: "", style = MaterialTheme.typography.bodyMedium, color = containerColor, fontWeight = FontWeight.Bold)
                         }
@@ -295,38 +333,72 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = {
-                    if (summonedIds.size < 8 || summonedIds.size > 12) {
-                        android.widget.Toast.makeText(
-                            context,
-                            "Debes convocar entre 8 y 12 $txtJugadoras (Actual: ${summonedIds.size})",
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-                    } else {
-                        shouldSaveDraft = false
-                        val updatedMatch = match.copy(
-                            isConvocatoriaSaved = true,
-                            summonedPlayers = summonedIds.toList(),
-                            unsummonedReasons = reasonsMap.toMap()
-                        )
-                        viewModel.addOrUpdateMatch(updatedMatch)
-                        isEditMode = false
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-            ) { Text("Guardar", color = Color.Black) }
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        if (match.isConvocatoriaSaved) {
+                            isEditMode = false
+                            summonedIds = match.summonedPlayers.toSet()
+                            reasonsMap = match.unsummonedReasons.toMutableMap()
+                        } else {
+                            shouldSaveDraft = false
+                            navController.popBackStack()
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                ) { Text("Cancelar", color = Color.White) }
+
+                Button(
+                    onClick = {
+                        if (summonedIds.size > maxPlayers) {
+                            android.widget.Toast.makeText(context, "Máximo $maxPlayers $txtJugadoras en esta categoría", android.widget.Toast.LENGTH_LONG).show()
+                        } else if (summonedIds.size < minPlayers) {
+                            if (minPlayers == 8 && summonedIds.size in 5..7) {
+                                showMinPlayersWarning = true
+                            } else {
+                                android.widget.Toast.makeText(context, "Debes convocar mínimo $minPlayers $txtJugadoras", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        } else {
+                            saveMatchAction()
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                ) { Text("Guardar", color = Color.Black) }
+            }
         }
+    }
+
+    if (showMinPlayersWarning) {
+        AlertDialog(
+            onDismissRequest = { showMinPlayersWarning = false },
+            title = { Text("Aviso de Normativa", fontWeight = FontWeight.Bold) },
+            text = { Text("No tienes el número mínimo de $txtJugadoras para cumplir con la normativa (Mínimo 8). ¿Deseas guardar la convocatoria de todos modos?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showMinPlayersWarning = false
+                        saveMatchAction()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800))
+                ) { Text("Continuar", color = Color.White) }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { showMinPlayersWarning = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                ) { Text("Revisar", color = Color.White) }
+            }
+        )
     }
 
     if (playerToUnsummon != null) {
         AlertDialog(
             onDismissRequest = { playerToUnsummon = null },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-            modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(0.95f).padding(16.dp),
             title = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text("Motivo de desconvocatoria:", style = MaterialTheme.typography.titleMedium)
@@ -381,6 +453,36 @@ fun ConvocatoriaScreen(viewModel: BasketViewModel, navController: NavController)
             dismissButton = {
                 TextButton(onClick = { playerToUnsummon = null }) { Text("Cancelar", color = Color.Gray) }
             }
+        )
+    }
+}
+
+// Extensión para sombras en Listas Verticales
+fun Modifier.verticalScrollShadow(listState: LazyListState) = this.drawWithContent {
+    drawContent()
+    val showTop = listState.canScrollBackward
+    val showBottom = listState.canScrollForward
+    val shadowHeight = 16.dp.toPx()
+
+    if (showTop) {
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color.Black.copy(alpha = 0.15f), Color.Transparent),
+                startY = 0f,
+                endY = shadowHeight
+            ),
+            size = Size(size.width, shadowHeight)
+        )
+    }
+    if (showBottom) {
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.15f)),
+                startY = size.height - shadowHeight,
+                endY = size.height
+            ),
+            topLeft = Offset(0f, size.height - shadowHeight),
+            size = Size(size.width, shadowHeight)
         )
     }
 }
