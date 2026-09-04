@@ -43,6 +43,12 @@ class BasketViewModel @Inject constructor(
         }
 
     // ============================================================
+    // ESTADO DEL PERFIL DE USUARIO
+    // ============================================================
+    private val _userProfile = MutableStateFlow<Map<String, String>>(emptyMap())
+    val userProfile: StateFlow<Map<String, String>> = _userProfile.asStateFlow()
+
+    // ============================================================
     // ESTADOS
     // ============================================================
 
@@ -127,53 +133,50 @@ class BasketViewModel @Inject constructor(
     // FIREBASE - LISTENERS
     // ============================================================
 
-    private fun startFirebaseListeners(
-        uid: String
-    ) {
-
+    private fun startFirebaseListeners(uid: String) {
         listeningUid = uid
+        val user = db.collection("users").document(uid)
 
-        val user =
-            db.collection("users")
-                .document(uid)
+        // ========================================================
+        // PERFIL DE USUARIO
+        // ========================================================
+        firebaseListeners +=
+            user.addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e(TAG, "Error leyendo perfil", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && snapshot.exists()) {
+                    val data = snapshot.data
+                    val name = data?.get("name") as? String ?: ""
+                    val lastName = data?.get("lastName") as? String ?: ""
+                    val club = data?.get("club") as? String ?: ""
+
+                    _userProfile.value = mapOf(
+                        "name" to name,
+                        "lastName" to lastName,
+                        "club" to club
+                    )
+                }
+            }
 
         // ========================================================
         // EQUIPOS
         // ========================================================
-
         firebaseListeners +=
             user.collection("teams")
                 .addSnapshotListener { snapshot, error ->
-
                     if (error != null) {
-
-                        Log.e(
-                            TAG,
-                            "Error leyendo equipos",
-                            error
-                        )
-
+                        Log.e(TAG, "Error leyendo equipos", error)
                         return@addSnapshotListener
                     }
-
                     if (snapshot != null) {
-
-                        val list =
-                            snapshot.documents.mapNotNull { doc ->
-
-                                doc.toObject(
-                                    Team::class.java
-                                )
-                            }
-
+                        val list = snapshot.documents.mapNotNull { doc ->
+                            doc.toObject(Team::class.java)
+                        }
                         _teams.value = list
-
-                        if (
-                            list.isNotEmpty() &&
-                            _selectedTeamYear.value == 0
-                        ) {
-                            _selectedTeamYear.value =
-                                list.first().year
+                        if (list.isNotEmpty() && _selectedTeamYear.value == 0) {
+                            _selectedTeamYear.value = list.first().year
                         }
                     }
                 }
@@ -181,152 +184,64 @@ class BasketViewModel @Inject constructor(
         // ========================================================
         // HORARIOS
         // ========================================================
-
         firebaseListeners +=
             user.collection("schedules")
                 .addSnapshotListener { snapshot, error ->
-
                     if (error != null) {
-
-                        Log.e(
-                            TAG,
-                            "Error leyendo horarios",
-                            error
-                        )
-
+                        Log.e(TAG, "Error leyendo horarios", error)
                         return@addSnapshotListener
                     }
-
                     if (snapshot != null) {
-
-                        _schedules.value =
-                            snapshot.documents.mapNotNull { doc ->
-                                doc.toObject(
-                                    TrainingSchedule::class.java
-                                )
-                            }
+                        _schedules.value = snapshot.documents.mapNotNull { doc ->
+                            doc.toObject(TrainingSchedule::class.java)
+                        }
                     }
                 }
 
         // ========================================================
         // PARTIDOS
         // ========================================================
-
         firebaseListeners +=
             user.collection("matches")
                 .addSnapshotListener { snapshot, error ->
-
                     if (error != null) {
-
-                        Log.e(
-                            TAG,
-                            "Error leyendo partidos",
-                            error
-                        )
-
+                        Log.e(TAG, "Error leyendo partidos", error)
                         return@addSnapshotListener
                     }
+                    if (snapshot == null) return@addSnapshotListener
 
-                    if (snapshot == null) {
-                        return@addSnapshotListener
-                    }
+                    val loadedMatches = snapshot.documents.mapNotNull { doc ->
+                        val parsed = doc.toObject(Match::class.java) ?: return@mapNotNull null
+                        val documentId = doc.id.toLongOrNull()
+                        val resolvedId = documentId ?: parsed.id
 
-                    val loadedMatches =
-                        snapshot.documents.mapNotNull { doc ->
+                        val data = doc.data
+                        val hasSavedField = data?.containsKey("isConvocatoriaSaved") == true
 
-                            val parsed =
-                                doc.toObject(
-                                    Match::class.java
-                                )
-                                    ?: return@mapNotNull null
-
-                            /*
-                             * Nos aseguramos de que el id usado
-                             * por la aplicación sea siempre el del
-                             * documento de Firestore.
-                             */
-                            val documentId =
-                                doc.id.toLongOrNull()
-
-                            val resolvedId =
-                                documentId
-                                    ?: parsed.id
-
-                            /*
-                             * Compatibilidad con documentos antiguos:
-                             *
-                             * Si el documento no tenía antes
-                             * isConvocatoriaSaved, Firestore no puede
-                             * distinguirlo de false al hacer
-                             * toObject().
-                             *
-                             * Pero una convocatoria guardada por la
-                             * aplicación sí tiene summonedPlayers.
-                             *
-                             * En ese caso consideramos que ya había
-                             * convocatoria guardada.
-                             */
-                            val data =
-                                doc.data
-
-                            val hasSavedField =
-                                data?.containsKey(
-                                    "isConvocatoriaSaved"
-                                ) == true
-
-                            val normalized =
-                                if (
-                                    !hasSavedField &&
-                                    parsed.summonedPlayers.isNotEmpty()
-                                ) {
-
-                                    parsed.copy(
-                                        id = resolvedId,
-                                        isConvocatoriaSaved = true
-                                    )
-
-                                } else {
-
-                                    parsed.copy(
-                                        id = resolvedId
-                                    )
-                                }
-
-                            normalized
+                        val normalized = if (!hasSavedField && parsed.summonedPlayers.isNotEmpty()) {
+                            parsed.copy(id = resolvedId, isConvocatoriaSaved = true)
+                        } else {
+                            parsed.copy(id = resolvedId)
                         }
-
-                    _matches.value =
-                        loadedMatches
+                        normalized
+                    }
+                    _matches.value = loadedMatches
                 }
 
         // ========================================================
         // FESTIVOS
         // ========================================================
-
         firebaseListeners +=
             user.collection("holidays")
                 .addSnapshotListener { snapshot, error ->
-
                     if (error != null) {
-
-                        Log.e(
-                            TAG,
-                            "Error leyendo festivos",
-                            error
-                        )
-
+                        Log.e(TAG, "Error leyendo festivos", error)
                         return@addSnapshotListener
                     }
-
                     if (snapshot != null) {
-
-                        val list =
-                            snapshot.documents.mapNotNull { doc ->
-                                doc.toObject(
-                                    Holiday::class.java
-                                )
-                            }
-
+                        val list = snapshot.documents.mapNotNull { doc ->
+                            doc.toObject(Holiday::class.java)
+                        }
                         if (list.isEmpty()) {
                             createDefaultHolidays(uid)
                         } else {
@@ -338,90 +253,51 @@ class BasketViewModel @Inject constructor(
         // ========================================================
         // JUGADORES
         // ========================================================
-
         firebaseListeners +=
             user.collection("players")
                 .addSnapshotListener { snapshot, error ->
-
                     if (error != null) {
-
-                        Log.e(
-                            TAG,
-                            "Error leyendo jugadores",
-                            error
-                        )
-
+                        Log.e(TAG, "Error leyendo jugadores", error)
                         return@addSnapshotListener
                     }
-
                     if (snapshot != null) {
-
-                        _players.value =
-                            snapshot.documents.mapNotNull { doc ->
-                                doc.toObject(
-                                    Player::class.java
-                                )
-                            }
+                        _players.value = snapshot.documents.mapNotNull { doc ->
+                            doc.toObject(Player::class.java)
+                        }
                     }
                 }
 
         // ========================================================
         // ASISTENCIAS
         // ========================================================
-
         firebaseListeners +=
             user.collection("attendances")
                 .addSnapshotListener { snapshot, error ->
-
                     if (error != null) {
-
-                        Log.e(
-                            TAG,
-                            "Error leyendo asistencias",
-                            error
-                        )
-
+                        Log.e(TAG, "Error leyendo asistencias", error)
                         return@addSnapshotListener
                     }
-
                     if (snapshot != null) {
-
-                        _attendances.value =
-                            snapshot.documents.mapNotNull { doc ->
-                                doc.toObject(
-                                    Attendance::class.java
-                                )
-                            }
+                        _attendances.value = snapshot.documents.mapNotNull { doc ->
+                            doc.toObject(Attendance::class.java)
+                        }
                     }
                 }
 
         // ========================================================
         // NOTAS / QUINTETOS
         // ========================================================
-
         firebaseListeners +=
             user.collection("training_notes")
                 .addSnapshotListener { snapshot, error ->
-
                     if (error != null) {
-
-                        Log.e(
-                            TAG,
-                            "Error leyendo notas",
-                            error
-                        )
-
+                        Log.e(TAG, "Error leyendo notas", error)
                         return@addSnapshotListener
                     }
-
                     if (snapshot != null) {
-
-                        _trainingNotes.value =
-                            snapshot.documents.mapNotNull { doc ->
-                                doc.toObject(
-                                    TrainingNote::class.java
-                                )
-                            }
+                        _trainingNotes.value = snapshot.documents.mapNotNull { doc ->
+                            doc.toObject(TrainingNote::class.java)
+                        }
                     }
                 }
     }
@@ -438,7 +314,6 @@ class BasketViewModel @Inject constructor(
     }
 
     private fun clearLocalData() {
-
         _teams.value = emptyList()
         _schedules.value = emptyList()
         _matches.value = emptyList()
@@ -446,6 +321,7 @@ class BasketViewModel @Inject constructor(
         _players.value = emptyList()
         _attendances.value = emptyList()
         _trainingNotes.value = emptyList()
+        _userProfile.value = emptyMap() // Limpiar perfil
 
         _selectedTeamYear.value = 0
     }
@@ -1101,107 +977,64 @@ class BasketViewModel @Inject constructor(
             }
     }
 
-    fun addOrUpdateSchedule(
-        newSchedule: TrainingSchedule,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
-    ) {
-
-        val user =
-            userDoc
-
+    fun addOrUpdateSchedule(newSchedule: TrainingSchedule, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val user = userDoc
         if (user == null) {
-
-            onError(
-                "No hay un usuario autenticado."
-            )
-
+            onError("No hay un usuario autenticado.")
             return
         }
 
-        val daySchedules =
-            _schedules.value.filter {
-                it.teamYear == newSchedule.teamYear &&
-                        it.dayOfWeek == newSchedule.dayOfWeek &&
-                        it.id != newSchedule.id
-            }
-
-        val newStart =
-            parseTime(
-                newSchedule.startTime
-            )
-
-        val newEnd =
-            parseTime(
-                newSchedule.endTime
-            )
-
+        // 1. Validar que la hora de inicio sea anterior a la de fin
+        val newStart = parseTime(newSchedule.startTime)
+        val newEnd = parseTime(newSchedule.endTime)
         if (newStart >= newEnd) {
-
-            onError(
-                "La hora de inicio debe ser anterior a la de fin."
-            )
-
+            onError("La hora de inicio debe ser anterior a la de fin.")
             return
         }
 
-        for (schedule in daySchedules) {
+        // 2. Validar que no se solape con otro entrenamiento del MISMO equipo
+        val teamDaySchedules = _schedules.value.filter {
+            it.teamYear == newSchedule.teamYear &&
+                    it.dayOfWeek == newSchedule.dayOfWeek &&
+                    it.id != newSchedule.id
+        }
 
-            val existStart =
-                parseTime(
-                    schedule.startTime
-                )
+        for (schedule in teamDaySchedules) {
+            val existStart = parseTime(schedule.startTime)
+            val existEnd = parseTime(schedule.endTime)
 
-            val existEnd =
-                parseTime(
-                    schedule.endTime
-                )
-
-            if (
-                maxOf(newStart, existStart) <
-                minOf(newEnd, existEnd)
-            ) {
-
-                onError(
-                    "El horario se solapa con otro entrenamiento (${schedule.startTime}-${schedule.endTime})."
-                )
-
+            if (maxOf(newStart, existStart) < minOf(newEnd, existEnd)) {
+                onError("El horario se solapa con otro entrenamiento de este equipo (${schedule.startTime}-${schedule.endTime}).")
                 return
             }
         }
 
-        val scheduleToSave =
-            if (newSchedule.id == 0L) {
+        // 3. NUEVO: Limitar a un máximo de 3 entrenamientos (de cualquier equipo) por día
+        val allSchedulesOnDay = _schedules.value.filter {
+            it.dayOfWeek == newSchedule.dayOfWeek && it.id != newSchedule.id
+        }
 
-                newSchedule.copy(
-                    id = System.currentTimeMillis()
-                )
+        if (allSchedulesOnDay.size >= 3) {
+            onError("No puede haber más de 3 entrenamientos programados el mismo día.")
+            return
+        }
 
-            } else {
-                newSchedule
-            }
+        // Guardado
+        val scheduleToSave = if (newSchedule.id == 0L) {
+            newSchedule.copy(id = System.currentTimeMillis())
+        } else {
+            newSchedule
+        }
 
         user.collection("schedules")
-            .document(
-                scheduleToSave.id.toString()
-            )
+            .document(scheduleToSave.id.toString())
             .set(scheduleToSave)
             .addOnSuccessListener {
-
-                _schedules.value =
-                    _schedules.value
-                        .filterNot {
-                            it.id == scheduleToSave.id
-                        } + scheduleToSave
-
+                _schedules.value = _schedules.value.filterNot { it.id == scheduleToSave.id } + scheduleToSave
                 onSuccess()
             }
             .addOnFailureListener { error ->
-
-                onError(
-                    error.message
-                        ?: "No se pudo guardar el horario."
-                )
+                onError(error.message ?: "No se pudo guardar el horario.")
             }
     }
 
@@ -1637,6 +1470,50 @@ class BasketViewModel @Inject constructor(
         draftSummonedIds = null
         draftReasonsMap = null
         draftIsEditMode = null
+    }
+
+    // ============================================================
+    // ACTUALIZAR PERFIL Y CONTRASEÑA
+    // ============================================================
+    fun updateUserProfile(name: String, lastName: String, club: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val userRef = userDoc
+        if (userRef == null) {
+            onError("No se encontró sesión de usuario.")
+            return
+        }
+
+        userRef.update(
+            mapOf(
+                "name" to name,
+                "lastName" to lastName,
+                "club" to club
+            )
+        ).addOnSuccessListener {
+            onSuccess()
+        }.addOnFailureListener { error ->
+            onError(error.message ?: "Error al actualizar los datos.")
+        }
+    }
+
+    fun changePassword(oldPass: String, newPass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val currentUser = auth.currentUser
+        val email = currentUser?.email
+
+        if (currentUser != null && email != null) {
+            val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, oldPass)
+
+            currentUser.reauthenticate(credential).addOnSuccessListener {
+                currentUser.updatePassword(newPass).addOnSuccessListener {
+                    onSuccess()
+                }.addOnFailureListener { error ->
+                    onError(error.message ?: "Error al actualizar la contraseña.")
+                }
+            }.addOnFailureListener {
+                onError("La contraseña actual es incorrecta.")
+            }
+        } else {
+            onError("No se encontró sesión de usuario activa.")
+        }
     }
 
     // ============================================================

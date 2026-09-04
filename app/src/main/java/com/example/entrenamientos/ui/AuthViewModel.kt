@@ -38,10 +38,7 @@ class AuthViewModel : ViewModel() {
             .addOnSuccessListener { result ->
                 val user = result.user
 
-                // Enviar correo de verificación para asegurar que el correo existe y es real
-                user?.sendEmailVerification()
-
-                // Guardar datos en Firestore
+                // Guardar datos en Firestore directamente
                 val userProfile = hashMapOf(
                     "name" to name,
                     "lastName" to lastName,

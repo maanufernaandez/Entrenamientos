@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -272,228 +273,122 @@ fun DayCell(
         .minOrNull()
         ?: java.time.LocalDate.of(2026, 9, 1)
 
-    val isBeforeSeason =
-        date.isBefore(earliestTrainingDate)
-
-    val isPastDay =
-        date.isBefore(java.time.LocalDate.now())
+    val isBeforeSeason = date.isBefore(earliestTrainingDate)
+    val isPastDay = date.isBefore(java.time.LocalDate.now())
 
     val cellBackgroundColor = when {
-        isBeforeSeason ->
-            Color.LightGray.copy(alpha = 0.4f)
-
-        isHoliday ->
-            Color(0xFFFFEBEE)
-
-        isPastDay ->
-            Color(0xFFFFF5F5)
-
-        else ->
-            Color.White
+        isBeforeSeason -> Color.LightGray.copy(alpha = 0.4f)
+        isHoliday -> Color(0xFFFFEBEE)
+        isPastDay -> Color(0xFFFFF5F5)
+        else -> Color.White
     }
 
-    val daySchedules =
-        if (isHoliday || isBeforeSeason) {
-            emptyList()
-        } else {
-            schedules
-                .filter { schedule ->
-                    if (schedule.dayOfWeek != dayValue) {
-                        return@filter false
-                    }
+    val daySchedules = if (isHoliday || isBeforeSeason) {
+        emptyList()
+    } else {
+        schedules.filter { schedule ->
+            if (schedule.dayOfWeek != dayValue) return@filter false
+            val team = teamsList.find { it.year == schedule.teamYear }
+            val firstDateStr = team?.firstTrainingDate ?: "2026-09-01"
+            val firstDate = try { java.time.LocalDate.parse(firstDateStr) } catch (_: Exception) { java.time.LocalDate.of(2026, 9, 1) }
+            !date.isBefore(firstDate)
+        }.sortedBy { it.startTime }
+    }
 
-                    val team =
-                        teamsList.find {
-                            it.year == schedule.teamYear
-                        }
+    val matchesForDay = matches.filter { it.date == date.toString() }
 
-                    val firstDateStr =
-                        team?.firstTrainingDate
-                            ?: "2026-09-01"
-
-                    val firstDate =
-                        try {
-                            java.time.LocalDate.parse(
-                                firstDateStr
-                            )
-                        } catch (_: Exception) {
-                            java.time.LocalDate.of(
-                                2026,
-                                9,
-                                1
-                            )
-                        }
-
-                    !date.isBefore(firstDate)
-                }
-                .sortedBy {
-                    it.startTime
-                }
-        }
-
-    val matchesForDay =
-        matches.filter {
-            it.date == date.toString()
-        }
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(cellBackgroundColor)
-            .clickable(
-                enabled =
-                !isBeforeSeason &&
-                        (
-                                daySchedules.isNotEmpty() ||
-                                        matchesForDay.isNotEmpty()
-                                )
-            ) {
-                onClick()
-            }
-            .padding(4.dp)
+            .clickable(enabled = !isBeforeSeason && (daySchedules.isNotEmpty() || matchesForDay.isNotEmpty())) { onClick() }
+            .padding(2.dp)
     ) {
+        // Día del mes siempre en su lugar arriba
         Text(
             text = date.dayOfMonth.toString(),
-            modifier = Modifier.align(
-                Alignment.TopStart
-            ),
             style = MaterialTheme.typography.bodyLarge,
             color = when {
-                isHoliday && !isBeforeSeason ->
-                    Color.Red
-
-                isBeforeSeason ->
-                    Color.Gray
-
-                else ->
-                    Color.Unspecified
+                isHoliday && !isBeforeSeason -> Color.Red
+                isBeforeSeason -> Color.Gray
+                else -> Color.Unspecified
             },
-            fontWeight =
-            if (isHoliday && !isBeforeSeason) {
-                FontWeight.ExtraBold
-            } else {
-                FontWeight.SemiBold
-            }
+            fontWeight = if (isHoliday && !isBeforeSeason) FontWeight.ExtraBold else FontWeight.SemiBold
         )
 
+        // Contenedor que usa todo el espacio restante para centrar verticalmente su contenido
         Column(
-            modifier = Modifier.align(
-                Alignment.Center
-            ),
-            horizontalAlignment =
-            Alignment.CenterHorizontally,
-            verticalArrangement =
-            Arrangement.spacedBy(4.dp)
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            if (
-                matchesForDay.isNotEmpty() &&
-                !isBeforeSeason
-            ) {
-                Column(
-                    horizontalAlignment =
-                    Alignment.CenterHorizontally,
-                    verticalArrangement =
-                    Arrangement.spacedBy(6.dp)
+            // Círculos de los partidos
+            if (matchesForDay.isNotEmpty() && !isBeforeSeason) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     matchesForDay.forEach { match ->
+                        val matchTeam = teamsList.find { it.year == match.teamYear }
+                        val circleColor = matchTeam?.colorHex?.let {
+                            try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
+                        } ?: Color.Gray
 
-                        val matchTeam =
-                            teamsList.find {
-                                it.year ==
-                                        match.teamYear
-                            }
-
-                        val circleColor =
-                            matchTeam?.colorHex?.let {
-                                try {
-                                    Color(
-                                        android.graphics.Color.parseColor(
-                                            it
-                                        )
-                                    )
-                                } catch (_: Exception) {
-                                    Color.Gray
-                                }
-                            } ?: Color.Gray
-
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    circleColor
-                                )
-                        )
+                        // Círculo de partido todavía más grande (26.dp)
+                        Box(modifier = Modifier.size(26.dp).clip(CircleShape).background(circleColor))
                     }
+                }
+                if (daySchedules.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
 
-            daySchedules.forEachIndexed {
-                    index,
-                    schedule ->
+            // TAMAÑO FIJO PARA LOS BLOQUES DE ENTRENAMIENTO
+            val boxHeight = 22.dp
+            val textSize = 11.sp
 
-                val team =
-                    teamsList.find {
-                        it.year ==
-                                schedule.teamYear
-                    }
-
-                val bgColor =
-                    team?.colorHex?.let {
-                        try {
-                            Color(
-                                android.graphics.Color.parseColor(
-                                    it
-                                )
-                            )
-                        } catch (_: Exception) {
-                            Color.Gray
-                        }
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                daySchedules.forEachIndexed { index, schedule ->
+                    val team = teamsList.find { it.year == schedule.teamYear }
+                    val bgColor = team?.colorHex?.let {
+                        try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
                     } ?: Color.Gray
 
-                val displayTitle =
-                    team?.shortName
-                        ?.takeIf {
-                            it.isNotBlank()
-                        }
-                        ?.take(6)
-                        ?.uppercase()
-                        ?: team?.name
-                            ?.take(6)
-                            ?.uppercase()
-                        ?: ""
+                    val displayTitle = team?.shortName?.takeIf { it.isNotBlank() }?.take(6)?.uppercase() ?: team?.name?.take(6)?.uppercase() ?: ""
 
-                if (
-                    index > 0 ||
-                    matchesForDay.isNotEmpty()
-                ) {
+                    // Separador fino entre cajas con más margen blanco para que se aprecie la separación
+                    if (index > 0) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.90f) // Ligeramente más estrecha para dar un toque elegante
+                                .height(1.dp)
+                                .background(Color.Black)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.8f)
-                            .height(1.dp)
-                            .background(Color.Black)
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.95f)
-                        .height(24.dp)
-                        .background(
-                            bgColor,
-                            shape =
-                            MaterialTheme.shapes.extraSmall
-                        ),
-                    contentAlignment =
-                    Alignment.Center
-                ) {
-                    Text(
-                        text = displayTitle,
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
+                            .fillMaxWidth(0.95f)
+                            .height(boxHeight)
+                            .background(bgColor, shape = MaterialTheme.shapes.extraSmall),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = displayTitle,
+                            color = Color.White,
+                            fontSize = textSize,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
@@ -507,726 +402,288 @@ fun DayOptionsDialog(
     navController: NavController,
     onDismiss: () -> Unit
 ) {
-    val teams =
-        viewModel.getTeamsForDate(date)
+    val teams = viewModel.getTeamsForDate(date)
+    val allMatches by viewModel.matches.collectAsState()
+    val dayMatches = allMatches.filter { it.date == date.toString() }
+    val teamsList by viewModel.teams.collectAsState()
 
-    val allMatches by
-    viewModel.matches.collectAsState()
+    val allAttendances by viewModel.attendances.collectAsState()
 
-    val dayMatches =
-        allMatches.filter {
-            it.date == date.toString()
-        }
-
-    val teamsList by
-    viewModel.teams.collectAsState()
-
-    val dayOfWeek =
-        date.dayOfWeek.getDisplayName(
-            java.time.format.TextStyle.FULL,
-            java.util.Locale("es", "ES")
-        ).replaceFirstChar {
-            it.uppercase()
-        }
-
+    val dayOfWeek = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
     val dayNumber = date.dayOfMonth
+    val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
 
-    val monthName =
-        date.month.getDisplayName(
-            java.time.format.TextStyle.FULL,
-            java.util.Locale("es", "ES")
-        )
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val scale = (configuration.screenWidthDp / 360f).coerceIn(0.85f, 1.25f)
 
-    val configuration =
-        androidx.compose.ui.platform.LocalConfiguration.current
+    // LÓGICA DE AUTOAJUSTE DINÁMICO DE PANTALLA
+    val totalBlocks = teams.size + dayMatches.size
+    val isDense = totalBlocks >= 3
+    val isMedium = totalBlocks == 2
 
-    val scale =
-        (
-                configuration.screenWidthDp / 360f
-                ).coerceIn(0.85f, 1.25f)
-
-    val uniformSpace =
-        (16 * scale).dp
-
-    val btnInternalSpace =
-        (8 * scale).dp
-
-    val btnHeight =
-        (48 * scale).dp
-
-    val backBtnHeight =
-        (36 * scale).dp
-
-    val fontSizeTitle =
-        (16 * scale).sp
-
-    val fontSizeTeam =
-        (16 * scale).sp
-
-    val fontSizeBtn =
-        (14 * scale).sp
-
-    val iconSize =
-        (20 * scale).dp
+    val uniformSpace = if (isDense) (6 * scale).dp else if (isMedium) (12 * scale).dp else (16 * scale).dp
+    val btnInternalSpace = if (isDense) (4 * scale).dp else if (isMedium) (6 * scale).dp else (8 * scale).dp
+    val btnHeight = if (isDense) (32 * scale).dp else if (isMedium) (40 * scale).dp else (48 * scale).dp
+    val backBtnHeight = if (isDense) (32 * scale).dp else (36 * scale).dp
+    val fontSizeTitle = if (isDense) (14 * scale).sp else (16 * scale).sp
+    val fontSizeTeam = if (isDense) (14 * scale).sp else (16 * scale).sp
+    val fontSizeBtn = if (isDense) (12 * scale).sp else if (isMedium) (13 * scale).sp else (14 * scale).sp
+    val iconSize = if (isDense) (16 * scale).dp else (20 * scale).dp
+    val btnPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = { },
-        properties =
-        androidx.compose.ui.window.DialogProperties(
-            usePlatformDefaultWidth = false
-        )
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Card(
-            modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .wrapContentHeight(),
+            modifier = Modifier.fillMaxWidth(0.95f).wrapContentHeight(),
             shape = MaterialTheme.shapes.medium
         ) {
             Column(
                 modifier = Modifier
-                    .verticalScroll(
-                        androidx.compose.foundation
-                            .rememberScrollState()
-                    )
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
                     .padding(uniformSpace),
-                horizontalAlignment =
-                Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
 
                 Row(
-                    verticalAlignment =
-                    Alignment.CenterVertically,
-                    horizontalArrangement =
-                    Arrangement.Center,
-                    modifier =
-                    Modifier.fillMaxWidth()
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
                         Icons.Default.DateRange,
                         contentDescription = null,
-                        modifier =
-                        Modifier.size(iconSize),
+                        modifier = Modifier.size(iconSize),
                         tint = Color.Black
                     )
-
-                    Spacer(
-                        Modifier.width(
-                            8.dp * scale
-                        )
-                    )
-
+                    Spacer(Modifier.width(8.dp * scale))
                     Text(
-                        text =
-                        "$dayOfWeek $dayNumber de $monthName",
-                        style =
-                        MaterialTheme.typography.titleMedium,
-                        fontSize =
-                        fontSizeTitle,
+                        text = "$dayOfWeek $dayNumber de $monthName",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontSize = fontSizeTitle,
                         color = Color.Black,
-                        fontWeight =
-                        FontWeight.Normal
+                        fontWeight = FontWeight.Normal
                     )
                 }
 
-                if (
-                    teams.isNotEmpty() ||
-                    dayMatches.isNotEmpty()
-                ) {
-                    Spacer(
-                        Modifier.height(
-                            uniformSpace
-                        )
-                    )
-
-                    HorizontalDivider(
-                        color = Color.Black,
-                        thickness = 1.dp
-                    )
-
-                    Spacer(
-                        Modifier.height(
-                            uniformSpace
-                        )
-                    )
+                if (teams.isNotEmpty() || dayMatches.isNotEmpty()) {
+                    Spacer(Modifier.height(uniformSpace))
+                    HorizontalDivider(color = Color.Black, thickness = 1.dp)
+                    Spacer(Modifier.height(uniformSpace))
                 }
 
                 if (teams.isNotEmpty()) {
-                    teams.forEachIndexed {
-                            index,
-                            teamYearLoop ->
-
+                    teams.forEachIndexed { index, teamYearLoop ->
                         if (index > 0) {
-                            Spacer(
-                                Modifier.height(
-                                    uniformSpace
-                                )
-                            )
-
-                            HorizontalDivider(
-                                color = Color.Black,
-                                thickness = 1.dp
-                            )
-
-                            Spacer(
-                                Modifier.height(
-                                    uniformSpace
-                                )
-                            )
+                            Spacer(Modifier.height(uniformSpace))
+                            HorizontalDivider(color = Color.Black, thickness = 1.dp)
+                            Spacer(Modifier.height(uniformSpace))
                         }
 
-                        val team =
-                            teamsList.find {
-                                it.year ==
-                                        teamYearLoop
-                            }
-
-                        val teamDisplayName =
-                            team?.shortName
-                                ?.takeIf {
-                                    it.isNotBlank()
-                                }
-                                ?: team?.name
-                                ?: "Equipo $teamYearLoop"
-
-                        val teamColor =
-                            team?.colorHex?.let {
-                                try {
-                                    Color(
-                                        android.graphics.Color.parseColor(
-                                            it
-                                        )
-                                    )
-                                } catch (_: Exception) {
-                                    Color.Gray
-                                }
-                            } ?: Color.Gray
+                        val team = teamsList.find { it.year == teamYearLoop }
+                        val teamDisplayName = team?.shortName?.takeIf { it.isNotBlank() } ?: team?.name ?: "Equipo $teamYearLoop"
+                        val teamColor = team?.colorHex?.let {
+                            try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
+                        } ?: Color.Gray
 
                         Text(
-                            text =
-                            teamDisplayName,
-                            style =
-                            MaterialTheme.typography.bodyLarge,
-                            fontSize =
-                            fontSizeTeam,
-                            color =
-                            teamColor,
-                            fontWeight =
-                            FontWeight.Bold
+                            text = teamDisplayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = fontSizeTeam,
+                            color = teamColor,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
                         )
 
-                        Spacer(
-                            Modifier.height(
-                                uniformSpace
-                            )
-                        )
+                        Spacer(Modifier.height(uniformSpace))
 
-                        val attendanceForTeam by
-                        viewModel
-                            .getAttendanceForDateAndTeam(
-                                date.toString(),
-                                teamYearLoop
-                            )
-                            .collectAsState(
-                                initial = emptyList()
-                            )
+                        val attendanceForTeam = allAttendances.filter { it.date == date.toString() && it.teamYear == teamYearLoop }
 
-                        val attendanceLabel =
-                            if (
-                                attendanceForTeam.isNotEmpty()
-                            ) {
-                                "Ver Asistencia"
-                            } else {
-                                "Asistencia"
-                            }
+                        val attendanceLabel = if (attendanceForTeam.isNotEmpty()) "Ver Asistencia" else "Asistencia"
+                        val trainingBtnModifier = Modifier.fillMaxWidth().height(btnHeight)
 
-                        val trainingBtnModifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(btnHeight)
-
-                        Column(
-                            Modifier.fillMaxWidth(),
-                            verticalArrangement =
-                            Arrangement.spacedBy(
-                                btnInternalSpace
-                            )
-                        ) {
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(btnInternalSpace)) {
                             Button(
                                 onClick = {
-                                    viewModel
-                                        .setSelectedTeamYear(
-                                            teamYearLoop
-                                        )
-
-                                    viewModel
-                                        .setSelectedDate(
-                                            date.toString()
-                                        )
-
+                                    viewModel.setSelectedTeamYear(teamYearLoop)
+                                    viewModel.setSelectedDate(date.toString())
                                     onDismiss()
-
-                                    navController.navigate(
-                                        "notes/ENTRENAMIENTO"
-                                    )
+                                    navController.navigate("notes/ENTRENAMIENTO")
                                 },
-                                modifier =
-                                trainingBtnModifier,
-                                colors =
-                                ButtonDefaults.buttonColors(
-                                    containerColor =
-                                    teamColor
-                                )
+                                modifier = trainingBtnModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = teamColor),
+                                contentPadding = btnPadding
                             ) {
-                                Text(
-                                    "Entrenamiento",
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    fontSize =
-                                    fontSizeBtn
-                                )
+                                Text("Entrenamiento", color = Color.White, maxLines = 1, fontSize = fontSizeBtn)
                             }
 
                             Button(
                                 onClick = {
-                                    viewModel
-                                        .setSelectedTeamYear(
-                                            teamYearLoop
-                                        )
-
-                                    viewModel
-                                        .setSelectedDate(
-                                            date.toString()
-                                        )
-
+                                    viewModel.setSelectedTeamYear(teamYearLoop)
+                                    viewModel.setSelectedDate(date.toString())
                                     onDismiss()
-
-                                    navController.navigate(
-                                        "attendance"
-                                    )
+                                    navController.navigate("attendance")
                                 },
-                                modifier =
-                                trainingBtnModifier,
-                                colors =
-                                ButtonDefaults.buttonColors(
-                                    containerColor =
-                                    teamColor
-                                )
+                                modifier = trainingBtnModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = teamColor),
+                                contentPadding = btnPadding
                             ) {
-                                Text(
-                                    attendanceLabel,
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    fontSize =
-                                    fontSizeBtn
-                                )
+                                Text(attendanceLabel, color = Color.White, maxLines = 1, fontSize = fontSizeBtn)
                             }
 
                             Button(
                                 onClick = {
-                                    viewModel
-                                        .setSelectedTeamYear(
-                                            teamYearLoop
-                                        )
-
-                                    viewModel
-                                        .setSelectedDate(
-                                            date.toString()
-                                        )
-
+                                    viewModel.setSelectedTeamYear(teamYearLoop)
+                                    viewModel.setSelectedDate(date.toString())
                                     onDismiss()
-
-                                    navController.navigate(
-                                        "notes/OTROS"
-                                    )
+                                    navController.navigate("notes/OTROS")
                                 },
-                                modifier =
-                                trainingBtnModifier,
-                                colors =
-                                ButtonDefaults.buttonColors(
-                                    containerColor =
-                                    teamColor
-                                )
+                                modifier = trainingBtnModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = teamColor),
+                                contentPadding = btnPadding
                             ) {
-                                Text(
-                                    "Notas",
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    fontSize =
-                                    fontSizeBtn
-                                )
+                                Text("Notas", color = Color.White, maxLines = 1, fontSize = fontSizeBtn)
                             }
                         }
                     }
                 }
 
                 if (dayMatches.isNotEmpty()) {
-
-                    dayMatches.forEachIndexed {
-                            index,
-                            match ->
-
-                        if (
-                            teams.isNotEmpty() ||
-                            index > 0
-                        ) {
-                            Spacer(
-                                Modifier.height(
-                                    uniformSpace
-                                )
-                            )
-
-                            HorizontalDivider(
-                                color = Color.Black,
-                                thickness = 1.dp
-                            )
-
-                            Spacer(
-                                Modifier.height(
-                                    uniformSpace
-                                )
-                            )
+                    dayMatches.forEachIndexed { index, match ->
+                        if (teams.isNotEmpty() || index > 0) {
+                            Spacer(Modifier.height(uniformSpace))
+                            HorizontalDivider(color = Color.Black, thickness = 1.dp)
+                            Spacer(Modifier.height(uniformSpace))
                         }
 
-                        val matchTeam =
-                            teamsList.find {
-                                it.year ==
-                                        match.teamYear
-                            }
-
-                        val matchTeamNameBase =
-                            matchTeam?.name
-                                ?: "Equipo ${match.teamYear}"
-
-                        val matchTeamDisplayName =
-                            if (match.isLocal) {
-                                "$matchTeamNameBase vs ${match.opponent}"
-                            } else {
-                                "${match.opponent} vs $matchTeamNameBase"
-                            }
-
-                        val matchTeamColor =
-                            matchTeam?.colorHex?.let {
-                                try {
-                                    Color(
-                                        android.graphics.Color.parseColor(
-                                            it
-                                        )
-                                    )
-                                } catch (_: Exception) {
-                                    Color.DarkGray
-                                }
-                            } ?: Color.DarkGray
+                        val matchTeam = teamsList.find { it.year == match.teamYear }
+                        val matchTeamNameBase = matchTeam?.name ?: "Equipo ${match.teamYear}"
+                        val matchTeamDisplayName = if (match.isLocal) "$matchTeamNameBase vs ${match.opponent}" else "${match.opponent} vs $matchTeamNameBase"
+                        val matchTeamColor = matchTeam?.colorHex?.let {
+                            try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.DarkGray }
+                        } ?: Color.DarkGray
 
                         Row(
-                            verticalAlignment =
-                            Alignment.CenterVertically,
-                            modifier =
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement =
-                            Arrangement.Center
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
                         ) {
-                            Icon(
-                                Icons.Default.LocationOn,
-                                contentDescription =
-                                null,
-                                modifier =
-                                Modifier.size(
-                                    iconSize
-                                ),
-                                tint = Color.Black
-                            )
-
-                            Spacer(
-                                Modifier.width(
-                                    8.dp * scale
-                                )
-                            )
-
+                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(iconSize), tint = Color.Black)
+                            Spacer(Modifier.width(8.dp * scale))
                             Text(
-                                text =
-                                "${match.time} - Polid. ${match.location}",
-                                style =
-                                MaterialTheme.typography.titleMedium,
-                                fontSize =
-                                fontSizeTitle,
-                                color =
-                                Color.Black,
-                                fontWeight =
-                                FontWeight.Normal
+                                text = "${match.time} - Polid. ${match.location}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontSize = fontSizeTitle,
+                                color = Color.Black,
+                                fontWeight = FontWeight.Normal
                             )
                         }
 
-                        Spacer(
-                            Modifier.height(
-                                8.dp * scale
-                            )
-                        )
+                        Spacer(Modifier.height(8.dp * scale))
 
                         Text(
-                            text =
-                            matchTeamDisplayName,
-                            style =
-                            MaterialTheme.typography.bodyLarge,
-                            fontSize =
-                            fontSizeTeam,
-                            color =
-                            matchTeamColor,
-                            fontWeight =
-                            FontWeight.Bold,
-                            modifier =
-                            Modifier.fillMaxWidth(),
-                            textAlign =
-                            TextAlign.Center
+                            text = matchTeamDisplayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = fontSizeTeam,
+                            color = matchTeamColor,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
                         )
 
-                        Spacer(
-                            Modifier.height(
-                                uniformSpace
-                            )
-                        )
+                        Spacer(Modifier.height(uniformSpace))
 
-                        val teamAttendances by
-                        viewModel
-                            .getAllAttendancesByTeam(
-                                match.teamYear
-                            )
-                            .collectAsState(
-                                initial = emptyList()
-                            )
+                        val teamAttendances = allAttendances.filter { it.teamYear == match.teamYear }
+                        val (canMake, _) = viewModel.canMakeConvocatoria(date, match.teamYear, teamAttendances)
 
-                        val (canMake, _) =
-                            viewModel.canMakeConvocatoria(
-                                date,
-                                match.teamYear,
-                                teamAttendances
-                            )
-
-                        // =====================================================
-                        // ESTADO REAL DEL PARTIDO
-                        // =====================================================
-
-                        val convocatoriaGuardada =
-                            match.isConvocatoriaSaved
-
-                        val convocatoriaEnabled =
-                            convocatoriaGuardada ||
-                                    canMake
-
-                        val quintetosEnabled =
-                            convocatoriaGuardada
-
-                        val resultadoEnabled =
-                            convocatoriaGuardada
-
-                        val matchButtonModifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(btnHeight)
+                        val convocatoriaGuardada = match.isConvocatoriaSaved
+                        val convocatoriaEnabled = convocatoriaGuardada || canMake
+                        val quintetosEnabled = convocatoriaGuardada
+                        val resultadoEnabled = convocatoriaGuardada
+                        val matchButtonModifier = Modifier.fillMaxWidth().height(btnHeight)
 
                         if (!convocatoriaEnabled) {
                             Text(
-                                text =
-                                "Rellena todas las asistencias anteriores para continuar",
+                                text = "Rellena todas las asistencias anteriores para continuar",
                                 color = Color.Red,
-                                fontSize =
-                                (13 * scale).sp,
-                                fontWeight =
-                                FontWeight.Bold,
-                                textAlign =
-                                TextAlign.Center,
-                                modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(
-                                        bottom =
-                                        btnInternalSpace
-                                    )
+                                fontSize = (13 * scale).sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(bottom = btnInternalSpace)
                             )
                         }
 
                         Column(
                             Modifier.fillMaxWidth(),
-                            verticalArrangement =
-                            Arrangement.spacedBy(
-                                btnInternalSpace
-                            )
+                            verticalArrangement = Arrangement.spacedBy(btnInternalSpace)
                         ) {
-
                             Button(
                                 onClick = {
-                                    viewModel
-                                        .setSelectedTeamYear(
-                                            match.teamYear
-                                        )
-
-                                    viewModel
-                                        .setSelectedDate(
-                                            date.toString()
-                                        )
-
+                                    viewModel.setSelectedTeamYear(match.teamYear)
+                                    viewModel.setSelectedDate(date.toString())
                                     onDismiss()
-
-                                    navController.navigate(
-                                        "convocatoria"
-                                    )
+                                    navController.navigate("convocatoria")
                                 },
-                                enabled =
-                                convocatoriaEnabled,
-                                modifier =
-                                matchButtonModifier,
-                                colors =
-                                ButtonDefaults.buttonColors(
-                                    containerColor =
-                                    matchTeamColor,
-                                    disabledContainerColor =
-                                    Color.LightGray
-                                )
+                                enabled = convocatoriaEnabled,
+                                modifier = matchButtonModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray),
+                                contentPadding = btnPadding
                             ) {
                                 Text(
-                                    text =
-                                    if (
-                                        convocatoriaGuardada
-                                    ) {
-                                        "Ver Convocatoria"
-                                    } else {
-                                        "Convocatoria"
-                                    },
-                                    color =
-                                    Color.White,
-                                    maxLines = 1,
-                                    fontSize =
-                                    fontSizeBtn
+                                    text = if (convocatoriaGuardada) "Ver Convocatoria" else "Convocatoria",
+                                    color = Color.White, maxLines = 1, fontSize = fontSizeBtn
                                 )
                             }
 
                             Button(
                                 onClick = {
-                                    viewModel
-                                        .setSelectedTeamYear(
-                                            match.teamYear
-                                        )
-
-                                    viewModel
-                                        .setSelectedDate(
-                                            date.toString()
-                                        )
-
+                                    viewModel.setSelectedTeamYear(match.teamYear)
+                                    viewModel.setSelectedDate(date.toString())
                                     onDismiss()
-
-                                    navController.navigate(
-                                        "quintetos"
-                                    )
+                                    navController.navigate("quintetos")
                                 },
-                                enabled =
-                                quintetosEnabled,
-                                modifier =
-                                matchButtonModifier,
-                                colors =
-                                ButtonDefaults.buttonColors(
-                                    containerColor =
-                                    matchTeamColor,
-                                    disabledContainerColor =
-                                    Color.LightGray
-                                )
+                                enabled = quintetosEnabled,
+                                modifier = matchButtonModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray),
+                                contentPadding = btnPadding
                             ) {
-                                Text(
-                                    "Quintetos",
-                                    color =
-                                    Color.White,
-                                    maxLines = 1,
-                                    fontSize =
-                                    fontSizeBtn
-                                )
+                                Text("Quintetos", color = Color.White, maxLines = 1, fontSize = fontSizeBtn)
                             }
 
                             Button(
                                 onClick = {
-                                    viewModel
-                                        .setSelectedTeamYear(
-                                            match.teamYear
-                                        )
-
-                                    viewModel
-                                        .setSelectedDate(
-                                            date.toString()
-                                        )
-
+                                    viewModel.setSelectedTeamYear(match.teamYear)
+                                    viewModel.setSelectedDate(date.toString())
                                     onDismiss()
-
-                                    navController.navigate(
-                                        "resultado"
-                                    )
+                                    navController.navigate("resultado")
                                 },
-                                enabled =
-                                resultadoEnabled,
-                                modifier =
-                                matchButtonModifier,
-                                colors =
-                                ButtonDefaults.buttonColors(
-                                    containerColor =
-                                    matchTeamColor,
-                                    disabledContainerColor =
-                                    Color.LightGray
-                                )
+                                enabled = resultadoEnabled,
+                                modifier = matchButtonModifier,
+                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray),
+                                contentPadding = btnPadding
                             ) {
                                 Text(
-                                    text =
-                                    if (
-                                        match.resultLocal !=
-                                        null
-                                    ) {
-                                        "Ver Resultado"
-                                    } else {
-                                        "Resultado"
-                                    },
-                                    color =
-                                    Color.White,
-                                    maxLines = 1,
-                                    fontSize =
-                                    fontSizeBtn
+                                    text = if (match.resultLocal != null) "Ver Resultado" else "Resultado",
+                                    color = Color.White, maxLines = 1, fontSize = fontSizeBtn
                                 )
                             }
                         }
                     }
                 }
 
-                Spacer(
-                    Modifier.height(
-                        uniformSpace
-                    )
-                )
-
-                HorizontalDivider(
-                    color = Color.Black,
-                    thickness = 1.dp
-                )
-
-                Spacer(
-                    Modifier.height(
-                        uniformSpace
-                    )
-                )
+                Spacer(Modifier.height(uniformSpace))
+                HorizontalDivider(color = Color.Black, thickness = 1.dp)
+                Spacer(Modifier.height(uniformSpace))
 
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(
-                            backBtnHeight
-                        ),
-                    colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor =
-                        Color.DarkGray
-                    )
+                    modifier = Modifier.fillMaxWidth().height(backBtnHeight),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                    contentPadding = btnPadding
                 ) {
-                    Text(
-                        "Volver",
-                        color = Color.White,
-                        maxLines = 1,
-                        fontSize =
-                        fontSizeBtn
-                    )
+                    Text("Volver", color = Color.White, maxLines = 1, fontSize = fontSizeBtn)
                 }
             }
         }

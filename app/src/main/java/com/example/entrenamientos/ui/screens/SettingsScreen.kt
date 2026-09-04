@@ -1,7 +1,7 @@
 package com.example.entrenamientos.ui.screens
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,16 +16,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,7 +53,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -67,6 +67,8 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
     var activeTab by remember { mutableStateOf("EQUIPOS") }
     val teamsList by viewModel.teams.collectAsState()
     val selectedTeam by viewModel.selectedTeamYear.collectAsState()
+
+    var showProfileDialog by remember { mutableStateOf(false) }
 
     // Lógica para ordenar los equipos desde Senior hasta Pre-Benjamin 3x3
     val categoryOrder = listOf(
@@ -157,22 +159,44 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
 
-        // --- AQUÍ ESTÁ EL ENCABEZADO CON EL BOTÓN DE CERRAR SESIÓN ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("AJUSTES", style = MaterialTheme.typography.headlineMedium.copy(fontSize = sp(24)))
-            IconButton(onClick = onLogout) {
-                Icon(
-                    imageVector = Icons.Default.ExitToApp,
-                    contentDescription = "Cerrar sesión",
-                    tint = Color.DarkGray
-                )
+
+            // Fila agrupadora para los dos iconos
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { showProfileDialog = true },
+                    modifier = Modifier
+                        .size(46.dp)
+                        .border(1.5.dp, Color.DarkGray, CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Perfil",
+                        tint = Color.DarkGray,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                IconButton(
+                    onClick = onLogout,
+                    modifier = Modifier.size(46.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ExitToApp,
+                        contentDescription = "Cerrar sesión",
+                        tint = com.example.entrenamientos.ui.theme.AttendanceRed,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
             }
         }
-        // -----------------------------------------------------------
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -186,7 +210,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                 }
             }
         } else {
-            LazyRow(
+            androidx.compose.foundation.lazy.LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -261,10 +285,10 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                         ) { Text("Partidos", color = if (!trackMatches) Color.Gray else if (activeTab == "PARTIDOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
 
                         if (!trackMatches) {
-                            Canvas(modifier = Modifier.matchParentSize().clip(CircleShape)) {
+                            androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize().clip(CircleShape)) {
                                 val w = size.width; val h = size.height; val strokeW = (3.5f * scale).dp.toPx()
-                                drawLine(color = Color.Red, start = Offset(w * 0.1f, h * 0.15f), end = Offset(w * 0.9f, h * 0.85f), strokeWidth = strokeW, cap = StrokeCap.Round)
-                                drawLine(color = Color.Red, start = Offset(w * 0.9f, h * 0.15f), end = Offset(w * 0.1f, h * 0.85f), strokeWidth = strokeW, cap = StrokeCap.Round)
+                                drawLine(color = Color.Red, start = Offset(w * 0.1f, h * 0.15f), end = Offset(w * 0.9f, h * 0.85f), strokeWidth = strokeW, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                                drawLine(color = Color.Red, start = Offset(w * 0.9f, h * 0.15f), end = Offset(w * 0.1f, h * 0.85f), strokeWidth = strokeW, cap = androidx.compose.ui.graphics.StrokeCap.Round)
                             }
                         }
                     }
@@ -284,7 +308,6 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                 "EQUIPOS" -> {
                     val cellBg = Color.LightGray.copy(alpha = 0.2f)
                     val cellShape = MaterialTheme.shapes.small
-                    val cellHeight = (42 * scale).dp
 
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(sortedTeamsList) { team ->
@@ -306,31 +329,48 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                             }
 
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(androidx.compose.foundation.layout.IntrinsicSize.Min),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
-                                    modifier = Modifier.weight(1f).height(cellHeight).clip(cellShape).background(cellBg).padding(horizontal = 16.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clip(cellShape)
+                                        .background(cellBg)
+                                        .padding(horizontal = 12.dp, vertical = 12.dp),
                                     contentAlignment = Alignment.CenterStart
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Box(modifier = Modifier.size(16.dp).clip(CircleShape).background(teamColor))
-                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Column {
-                                            Text(text = team.name, style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(12)), color = Color.Gray, maxLines = 1)
+                                            Text(
+                                                text = team.name,
+                                                style = MaterialTheme.typography.bodyLarge.copy(fontSize = sp(15)),
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = subtitle,
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = sp(12)),
+                                                color = Color.Gray,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
                                 }
 
-                                Box(modifier = Modifier.size(cellHeight).clip(cellShape).background(cellBg), contentAlignment = Alignment.Center) {
+                                Box(modifier = Modifier.width(48.dp).fillMaxHeight().clip(cellShape).background(cellBg), contentAlignment = Alignment.Center) {
                                     IconButton(onClick = { teamToEdit = team; showTeamDialog = true }) {
                                         Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray)
                                     }
                                 }
 
-                                Box(modifier = Modifier.size(cellHeight).clip(cellShape).background(cellBg), contentAlignment = Alignment.Center) {
+                                Box(modifier = Modifier.width(48.dp).fillMaxHeight().clip(cellShape).background(cellBg), contentAlignment = Alignment.Center) {
                                     IconButton(onClick = { teamToDelete = team }) {
                                         Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = com.example.entrenamientos.ui.theme.AttendanceRed)
                                     }
@@ -558,6 +598,127 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                 }
                 "FESTIVOS" -> {
                     FestivosSettingsTab(viewModel)
+                }
+            }
+        }
+    }
+
+    // --- POPUP PERFIL ---
+    if (showProfileDialog) {
+        val profile by viewModel.userProfile.collectAsState()
+
+        var pName by remember(profile) { mutableStateOf(profile["name"] ?: "") }
+        var pLastName by remember(profile) { mutableStateOf(profile["lastName"] ?: "") }
+        var pClub by remember(profile) { mutableStateOf(profile["club"] ?: "") }
+
+        var oldPass by remember { mutableStateOf("") }
+        var newPass by remember { mutableStateOf("") }
+        var confirmPass by remember { mutableStateOf("") }
+
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showProfileDialog = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.9f).padding(8.dp),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Perfil de Usuario", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+                        IconButton(onClick = { showProfileDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    Column(modifier = Modifier.weight(1f).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                        Text("Datos Personales", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(value = pName, onValueChange = { pName = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(value = pLastName, onValueChange = { pLastName = it }, label = { Text("Apellidos") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(value = pClub, onValueChange = { pClub = it }, label = { Text("Nombre del Club") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = {
+                                if (pName.isBlank() || pLastName.isBlank() || pClub.isBlank()) {
+                                    android.widget.Toast.makeText(context, "Rellena todos los campos", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    viewModel.updateUserProfile(pName, pLastName, pClub,
+                                        onSuccess = { android.widget.Toast.makeText(context, "Perfil actualizado", android.widget.Toast.LENGTH_SHORT).show() },
+                                        onError = { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                        ) {
+                            Text("Actualizar", color = Color.Black)
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Text("Cambiar Contraseña", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = oldPass, onValueChange = { oldPass = it }, label = { Text("Contraseña actual") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = newPass, onValueChange = { newPass = it }, label = { Text("Nueva contraseña") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = confirmPass, onValueChange = { confirmPass = it }, label = { Text("Confirmar nueva contraseña") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = {
+                                if (oldPass.isBlank() || newPass.isBlank() || confirmPass.isBlank()) {
+                                    android.widget.Toast.makeText(context, "Rellena todos los campos", android.widget.Toast.LENGTH_SHORT).show()
+                                } else if (newPass.length !in 8..20) {
+                                    android.widget.Toast.makeText(context, "La nueva contraseña debe tener entre 8 y 20 caracteres", android.widget.Toast.LENGTH_SHORT).show()
+                                } else if (newPass != confirmPass) {
+                                    android.widget.Toast.makeText(context, "Las contraseñas no coinciden", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    viewModel.changePassword(oldPass, newPass,
+                                        onSuccess = {
+                                            android.widget.Toast.makeText(context, "Contraseña actualizada", android.widget.Toast.LENGTH_SHORT).show()
+                                            oldPass = ""
+                                            newPass = ""
+                                            confirmPass = ""
+                                        },
+                                        onError = { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                        ) {
+                            Text("Cambiar contraseña", color = Color.Black)
+                        }
+
+                        Spacer(modifier = Modifier.height(32.dp))
+                    }
                 }
             }
         }
