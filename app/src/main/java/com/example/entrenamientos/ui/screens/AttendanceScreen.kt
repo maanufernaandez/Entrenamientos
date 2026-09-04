@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -24,6 +25,9 @@ fun AttendanceScreen(viewModel: BasketViewModel, navController: NavController) {
     val teamYear by viewModel.selectedTeamYear.collectAsState()
     val players by viewModel.getPlayersForTeam(teamYear).collectAsState(initial = emptyList())
     val currentAttendances by viewModel.getAttendanceForDateAndTeam(date, teamYear).collectAsState(initial = emptyList())
+
+    // Obtenemos la lista de equipos para sacar los datos del equipo actual
+    val teamsList by viewModel.teams.collectAsState()
 
     val attendanceMap = remember(currentAttendances) {
         mutableStateMapOf<Long, Int>().apply {
@@ -44,14 +48,68 @@ fun AttendanceScreen(viewModel: BasketViewModel, navController: NavController) {
     val customMonth = monthNames[dateObj.monthValue - 1]
     val dayNumber = dateObj.dayOfMonth
 
+    // --------------------------------------------------------
+    // DATOS DEL EQUIPO (Color y Categoría Completa)
+    // --------------------------------------------------------
+    val team = teamsList.find { it.year == teamYear }
+    val teamColor = team?.colorHex?.let {
+        try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
+    } ?: Color.Black
+
+    val genderStr = when (team?.gender) {
+        "M" -> "Masculino"
+        "F" -> "Femenino"
+        else -> "Mixto"
+    }
+
+    // Composición estricta: [Categoría] [Género] [División]
+    val catSplit = team?.categoryYear?.split(" ") ?: emptyList()
+    val fullCategory = if (catSplit.size >= 2 && (catSplit.last() == "1ª" || catSplit.last() == "2ª")) {
+        val baseCat = catSplit.dropLast(1).joinToString(" ")
+        "$baseCat $genderStr ${catSplit.last()}"
+    } else if (!team?.categoryYear.isNullOrBlank()) {
+        "${team?.categoryYear} $genderStr"
+    } else {
+        genderStr
+    }
+
     androidx.activity.compose.BackHandler {
         navController.popBackStack()
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Asistencia $dayOfWeek $dayNumber $customMonth", style = MaterialTheme.typography.headlineMedium)
+
         Spacer(modifier = Modifier.height(4.dp))
-        Text("Toca para cambiar el estado", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+
+        // Categoría compuesta en su color y 100% centrado
+        Text(
+            text = fullCategory,
+            style = MaterialTheme.typography.titleLarge,
+            color = teamColor,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
+        )
+
+        // Línea horizontal centrada, separada a partes iguales y sin llegar a los bordes
+        Spacer(modifier = Modifier.height(12.dp))
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 40.dp),
+            thickness = 1.dp,
+            color = Color.Black
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Texto centrado en negro
+        Text(
+            text = "Toca para cambiar el estado",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.Black,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -99,30 +157,73 @@ fun AttendanceScreen(viewModel: BasketViewModel, navController: NavController) {
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = { navController.popBackStack() },
-                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
-                modifier = Modifier.weight(1f)
-            ) { Text("Cancelar", color = Color.White) }
 
-            Button(
-                onClick = {
-                    val newAttendances = sortedPlayers.map { player ->
-                        Attendance(
-                            id = currentAttendances.find { it.playerId == player.id }?.id ?: 0,
-                            date = date,
-                            playerId = player.id,
-                            teamYear = teamYear,
-                            status = attendanceMap[player.id] ?: 0
-                        )
-                    }
-                    viewModel.saveAttendances(newAttendances)
-                    navController.popBackStack()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen),
-                modifier = Modifier.weight(1f)
-            ) { Text("Guardar", color = Color.Black) }
+        // LÓGICA CONDICIONAL PARA LOS BOTONES
+        if (currentAttendances.isEmpty()) {
+            // NUEVA ASISTENCIA: 2 Botones
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { navController.popBackStack() },
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
+                    modifier = Modifier.weight(1f)
+                ) { Text("Cancelar", color = Color.White) }
+
+                Button(
+                    onClick = {
+                        val newAttendances = sortedPlayers.map { player ->
+                            Attendance(
+                                id = 0,
+                                date = date,
+                                playerId = player.id,
+                                teamYear = teamYear,
+                                status = attendanceMap[player.id] ?: 0
+                            )
+                        }
+                        viewModel.saveAttendances(newAttendances)
+                        navController.popBackStack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen),
+                    modifier = Modifier.weight(1f)
+                ) { Text("Guardar", color = Color.Black) }
+            }
+        } else {
+            // EDITAR ASISTENCIA: 3 Botones
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { navController.popBackStack() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Atrás", color = Color.White) }
+
+                    Button(
+                        onClick = {
+                            val updatedAttendances = sortedPlayers.map { player ->
+                                Attendance(
+                                    id = currentAttendances.find { it.playerId == player.id }?.id ?: 0,
+                                    date = date,
+                                    playerId = player.id,
+                                    teamYear = teamYear,
+                                    status = attendanceMap[player.id] ?: 0
+                                )
+                            }
+                            viewModel.saveAttendances(updatedAttendances)
+                            navController.popBackStack()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen),
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Actualizar", color = Color.Black) }
+                }
+
+                Button(
+                    onClick = {
+                        viewModel.deleteAttendances(currentAttendances)
+                        navController.popBackStack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Eliminar Asistencia", color = Color.White) }
+            }
         }
     }
 }

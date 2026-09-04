@@ -950,6 +950,22 @@ class BasketViewModel @Inject constructor(
         }
     }
 
+    fun updateTeamLastTrainingDate(year: Int, newDate: String) {
+        val userRef = userDoc ?: return
+        val currentTeams = _teams.value.toMutableList()
+        val index = currentTeams.indexOfFirst { it.year == year }
+        if (index != -1) {
+            val updatedTeam = currentTeams[index].copy(lastTrainingDate = newDate)
+            currentTeams[index] = updatedTeam
+            _teams.value = currentTeams
+
+            userRef.collection("teams").document(year.toString())
+                .update("lastTrainingDate", newDate)
+                .addOnFailureListener {
+                }
+        }
+    }
+
     fun deleteSchedule(
         schedule: TrainingSchedule
     ) {
@@ -1130,6 +1146,24 @@ class BasketViewModel @Inject constructor(
                     error
                 )
             }
+    }
+
+    fun deleteAttendances(attendances: List<com.example.entrenamientos.data.Attendance>) {
+        val userRef = userDoc ?: return
+        val batch = db.batch()
+
+        attendances.forEach { attendance ->
+            val docRef = userRef.collection("attendances").document(attendance.id.toString())
+            batch.delete(docRef)
+        }
+
+        batch.commit().addOnSuccessListener {
+            // Actualizar la lista local eliminando los que coincidan con los IDs borrados
+            val deletedIds = attendances.map { it.id }
+            _attendances.value = _attendances.value.filterNot { it.id in deletedIds }
+        }.addOnFailureListener {
+            // Manejar el error si es necesario
+        }
     }
 
     fun getAllAttendancesByTeam(

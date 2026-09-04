@@ -79,7 +79,8 @@ fun CalendarScreen(
         java.time.YearMonth.from(earliest)
     }
 
-    val maxMonth = java.time.YearMonth.of(2027, 7)
+    // Límite máximo fijado en Mayo de 2027
+    val maxMonth = java.time.YearMonth.of(2027, 5)
 
     var currentMonth by remember {
         mutableStateOf(java.time.YearMonth.of(2026, 9))
@@ -98,6 +99,11 @@ fun CalendarScreen(
             currentMonth = minMonth
         }
     }
+
+    // Calculamos el mismo tamaño dinámico que usamos en Ajustes
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val scale = (configuration.screenWidthDp / 360f).coerceIn(0.85f, 1.25f)
+    fun sp(base: Int) = (base * scale).sp
 
     Column(
         modifier = Modifier
@@ -126,7 +132,7 @@ fun CalendarScreen(
                     java.time.format.TextStyle.FULL,
                     java.util.Locale("es", "ES")
                 ).uppercase()} ${currentMonth.year}",
-                style = MaterialTheme.typography.titleLarge
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = sp(24))
             )
 
             IconButton(

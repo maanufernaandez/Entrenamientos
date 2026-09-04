@@ -21,20 +21,53 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
     var noteContent by remember(existingNote) { mutableStateOf(existingNote?.content ?: "") }
 
     val team = teamsList.find { it.year == teamYear }
-    val teamTitle = team?.name ?: ""
     val titlePrefix = if (noteType == "ENTRENAMIENTO") "Entrenamiento" else "Notas"
 
     val date = java.time.LocalDate.parse(dateStr)
     val dayOfWeek = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
     val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
 
+    // Lógica para obtener el color y la categoría completa del equipo
+    val teamColor = team?.colorHex?.let {
+        try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
+    } ?: Color.Black
+
+    val genderStr = when (team?.gender) {
+        "M" -> "Masculino"
+        "F" -> "Femenino"
+        else -> "Mixto"
+    }
+
+    val catSplit = team?.categoryYear?.split(" ") ?: emptyList()
+    val fullCategory = if (catSplit.size >= 2 && (catSplit.last() == "1ª" || catSplit.last() == "2ª")) {
+        val baseCat = catSplit.dropLast(1).joinToString(" ")
+        "$baseCat $genderStr ${catSplit.last()}"
+    } else if (!team?.categoryYear.isNullOrBlank()) {
+        "${team?.categoryYear} $genderStr"
+    } else {
+        genderStr
+    }
+
     androidx.activity.compose.BackHandler {
         navController.popBackStack()
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(text = "$titlePrefix $teamTitle:", style = MaterialTheme.typography.headlineMedium)
+        Text(text = titlePrefix, style = MaterialTheme.typography.headlineMedium)
         Text(text = "$dayOfWeek ${date.dayOfMonth} de $monthName", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Categoría centrada y con el color del equipo
+        Text(
+            text = fullCategory,
+            style = MaterialTheme.typography.titleLarge,
+            color = teamColor,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(

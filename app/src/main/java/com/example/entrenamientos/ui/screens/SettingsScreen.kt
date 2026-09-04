@@ -53,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -287,8 +288,8 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                         if (!trackMatches) {
                             androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize().clip(CircleShape)) {
                                 val w = size.width; val h = size.height; val strokeW = (3.5f * scale).dp.toPx()
-                                drawLine(color = Color.Red, start = Offset(w * 0.1f, h * 0.15f), end = Offset(w * 0.9f, h * 0.85f), strokeWidth = strokeW, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                                drawLine(color = Color.Red, start = Offset(w * 0.9f, h * 0.15f), end = Offset(w * 0.1f, h * 0.85f), strokeWidth = strokeW, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                                drawLine(color = Color.Red, start = Offset(w * 0.1f, h * 0.15f), end = Offset(w * 0.9f, h * 0.85f), strokeWidth = strokeW, cap = StrokeCap.Round)
+                                drawLine(color = Color.Red, start = Offset(w * 0.9f, h * 0.15f), end = Offset(w * 0.1f, h * 0.85f), strokeWidth = strokeW, cap = StrokeCap.Round)
                             }
                         }
                     }
@@ -438,7 +439,10 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                 }
                 "HORARIOS" -> {
                     var firstTrainingDateInput by remember(selectedTeam) {
-                        mutableStateOf(sortedTeamsList.find { it.year == selectedTeam }?.firstTrainingDate ?: "2026-09-01")
+                        mutableStateOf(sortedTeamsList.find { it.year == selectedTeam }?.firstTrainingDate?.takeIf { it.isNotBlank() } ?: "2026-09-01")
+                    }
+                    var lastTrainingDateInput by remember(selectedTeam) {
+                        mutableStateOf(sortedTeamsList.find { it.year == selectedTeam }?.lastTrainingDate?.takeIf { it.isNotBlank() } ?: "2027-05-31")
                     }
 
                     val teamDaysUsed = teamSchedules.map { it.dayOfWeek }
@@ -446,28 +450,91 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
 
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         item {
-                            Text("Fecha del primer entrenamiento:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            androidx.compose.material3.OutlinedButton(
-                                onClick = {
-                                    val parts = firstTrainingDateInput.split("-")
-                                    val y = parts.getOrNull(0)?.toIntOrNull() ?: 2026
-                                    val m = (parts.getOrNull(1)?.toIntOrNull() ?: 9) - 1
-                                    val d = parts.getOrNull(2)?.toIntOrNull() ?: 1
-                                    android.app.DatePickerDialog(context, { _, year, month, day ->
-                                        val newDate = String.format(java.util.Locale.getDefault(), "%04d-%02d-%02d", year, month + 1, day)
-                                        firstTrainingDateInput = newDate
-                                        viewModel.updateTeamFirstTrainingDate(selectedTeam, newDate)
-                                    }, y, m, d).show()
-                                },
-                                modifier = Modifier.fillMaxWidth()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(androidx.compose.foundation.layout.IntrinsicSize.Min),
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                val parsedDate = try { java.time.LocalDate.parse(firstTrainingDateInput) } catch (_: Exception) { java.time.LocalDate.of(2026, 9, 1) }
-                                val formatted = "${parsedDate.dayOfMonth} de ${parsedDate.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))} ${parsedDate.year}"
-                                Text("📅 $formatted", color = Color.Black)
+                                // Lado izquierdo (Primer entrenamiento)
+                                Column(
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp, bottom = 16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "Primer entrenamiento:",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    androidx.compose.material3.OutlinedButton(
+                                        onClick = {
+                                            val parts = firstTrainingDateInput.split("-")
+                                            val y = parts.getOrNull(0)?.toIntOrNull() ?: 2026
+                                            val m = (parts.getOrNull(1)?.toIntOrNull() ?: 9) - 1
+                                            val d = parts.getOrNull(2)?.toIntOrNull() ?: 1
+                                            android.app.DatePickerDialog(context, { _, year, month, day ->
+                                                val newDate = String.format(java.util.Locale.getDefault(), "%04d-%02d-%02d", year, month + 1, day)
+                                                firstTrainingDateInput = newDate
+                                                viewModel.updateTeamFirstTrainingDate(selectedTeam, newDate)
+                                            }, y, m, d).show()
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)
+                                    ) {
+                                        val parsedDate = try { java.time.LocalDate.parse(firstTrainingDateInput) } catch (_: Exception) { java.time.LocalDate.of(2026, 9, 1) }
+                                        val formattedMonth = parsedDate.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+                                        Text("${parsedDate.dayOfMonth} $formattedMonth ${parsedDate.year}", color = Color.Black, fontSize = sp(14), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+
+                                // Línea vertical separadora
+                                Box(
+                                    modifier = Modifier
+                                        .width(1.dp)
+                                        .fillMaxHeight()
+                                        .background(Color.Black)
+                                )
+
+                                // Lado derecho (Último entrenamiento)
+                                Column(
+                                    modifier = Modifier.weight(1f).padding(start = 8.dp, bottom = 16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "Último entrenamiento:",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    androidx.compose.material3.OutlinedButton(
+                                        onClick = {
+                                            val parts = lastTrainingDateInput.split("-")
+                                            val y = parts.getOrNull(0)?.toIntOrNull() ?: 2027
+                                            val m = (parts.getOrNull(1)?.toIntOrNull() ?: 5) - 1
+                                            val d = parts.getOrNull(2)?.toIntOrNull() ?: 31
+                                            android.app.DatePickerDialog(context, { _, year, month, day ->
+                                                val newDate = String.format(java.util.Locale.getDefault(), "%04d-%02d-%02d", year, month + 1, day)
+                                                lastTrainingDateInput = newDate
+                                                viewModel.updateTeamLastTrainingDate(selectedTeam, newDate)
+                                            }, y, m, d).show()
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)
+                                    ) {
+                                        val parsedDate = try { java.time.LocalDate.parse(lastTrainingDateInput) } catch (_: Exception) { java.time.LocalDate.of(2027, 5, 31) }
+                                        val formattedMonth = parsedDate.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
+                                        Text("${parsedDate.dayOfMonth} $formattedMonth ${parsedDate.year}", color = Color.Black, fontSize = sp(14), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
                             }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            HorizontalDivider()
+
+                            // Línea horizontal (queda perfectamente unida a la vertical gracias al padding inferior de las columnas)
+                            HorizontalDivider(color = Color.Black)
                             Spacer(modifier = Modifier.height(8.dp))
                             Text("Horarios Semanales:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(8.dp))
@@ -717,7 +784,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                             Text("Cambiar contraseña", color = Color.Black)
                         }
 
-                        Spacer(modifier = Modifier.height(32.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }

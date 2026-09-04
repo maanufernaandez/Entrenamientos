@@ -177,13 +177,56 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 }
             }
 
+            // =================================================================================
+            // MOTOR DE GENERACIÓN DE SEMANAS INTELIGENTE (Corregido)
+            // =================================================================================
+            val firstTrainingStr = activeTeamObj?.firstTrainingDate?.takeIf { it.isNotBlank() } ?: "2026-09-01"
+            val firstTrainingDate = try { java.time.LocalDate.parse(firstTrainingStr) } catch (_: Exception) { java.time.LocalDate.of(2026, 9, 1) }
+
+            // Agrupamos las asistencias que SÍ existen en la base de datos
             val attendancesByWeek = attendances.groupBy {
                 java.time.LocalDate.parse(it.date).with(java.time.DayOfWeek.MONDAY)
             }
 
+            // Calculamos el límite dinámico:
+            // Mostramos semanas hasta el día de hoy REAL, a menos que en tus pruebas
+            // hayas avanzado más en el calendario (tomamos la máxima fecha de asistencia registrada).
+            val todayReal = java.time.LocalDate.now()
+            val lastAttendanceDate = attendances.mapNotNull {
+                try { java.time.LocalDate.parse(it.date) } catch (_: Exception) { null }
+            }.maxOrNull() ?: todayReal
+
+            val latestDateToConsider = if (lastAttendanceDate.isAfter(todayReal)) lastAttendanceDate else todayReal
+            val currentWeek = latestDateToConsider.with(java.time.DayOfWeek.MONDAY)
+
+            val validWeeks = mutableSetOf<java.time.LocalDate>()
+
+            // 1. Añadir siempre las semanas que YA tienen asistencias (las que rellenas adelantándote)
+            validWeeks.addAll(attendancesByWeek.keys)
+
+            // 2. Generar semanas vacías desde el inicio hasta el "hoy simulado"
+            var tempWeek = firstTrainingDate.with(java.time.DayOfWeek.MONDAY)
+            if (!tempWeek.isAfter(currentWeek)) {
+                var limit = 0
+                while (!tempWeek.isAfter(currentWeek) && limit < 100) {
+                    validWeeks.add(tempWeek)
+                    tempWeek = tempWeek.plusWeeks(1)
+                    limit++
+                }
+            }
+
+            // 3. FILTRO FINAL ESTRICTO:
+            // Eliminar semanas cuyo domingo sea ANTERIOR a la fecha de inicio.
+            // Esto aniquila para siempre la semana del 31 de agosto si empiezas el 10 de sep.
+            validWeeks.retainAll { weekStart ->
+                val weekEndSunday = weekStart.plusDays(6) // Domingo de esa semana
+                !weekEndSunday.isBefore(firstTrainingDate) || attendancesByWeek.containsKey(weekStart)
+            }
+
             val monthToWeeksMap = mutableMapOf<java.time.YearMonth, MutableList<Pair<java.time.LocalDate, List<com.example.entrenamientos.data.Attendance>>>>()
 
-            attendancesByWeek.forEach { (weekStart, weekAtts) ->
+            validWeeks.forEach { weekStart ->
+                val weekAtts = attendancesByWeek[weekStart] ?: emptyList()
                 val targetMonth = (0..6)
                     .map { offset -> java.time.YearMonth.from(weekStart.plusDays(offset.toLong())) }
                     .groupingBy { it }
@@ -192,12 +235,13 @@ fun StatsScreen(viewModel: BasketViewModel) {
                     .key
                 monthToWeeksMap.getOrPut(targetMonth) { mutableListOf() }.add(weekStart to weekAtts)
             }
+            // =================================================================================
 
             val sortedMonths = monthToWeeksMap.toSortedMap(compareByDescending { it })
             val formatterMonth = java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale("es", "ES"))
 
             if (sortedMonths.isEmpty()) {
-                item { Text("No hay datos de asistencia todavía.", color = Color.Gray) }
+                item { Text("Aún no hay datos de asistencia para mostrar.", color = Color.Gray) }
             }
 
             sortedMonths.forEach { (month, weeks) ->
@@ -234,7 +278,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 if (isExpanded) {
                     val sortedWeeks = weeks.sortedByDescending { it.first }
                     sortedWeeks.forEach { (weekStart, weekAttendances) ->
-                        val weekEnd = weekStart.plusDays(4)
+                        val weekEnd = weekStart.plusDays(4) // Viernes
                         val isWeekExpanded = expandedWeekDetails[weekStart] ?: false
 
                         item {
@@ -277,8 +321,9 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                     colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
-                                        if (sortedPlayersByWeekAttendance.isEmpty()) {
-                                            Text("No hay registros.", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
+                                        // Si todos los contadores están a cero (incluso asiste), es que no hay registros guardados en BD
+                                        if (sortedPlayersByWeekAttendance.all { it.present == 0 && it.justified == 0 && it.unjustified == 0 }) {
+                                            Text("Aún no hay registros esta semana.", style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
                                         } else {
                                             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                                 Text(labelJugadoras, modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
@@ -559,7 +604,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                                 Text("Convocatoria no guardada todavía.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                                             } else {
                                                 val convocadas = players.filter { match.summonedPlayers.contains(it.id) }
-                                                val desconvocadas = players.filter { match.unsummonedReasons.containsKey(it.id.toString()) } // <--- Corregido a .toString()
+                                                val desconvocadas = players.filter { match.unsummonedReasons.containsKey(it.id.toString()) }
 
                                                 Text("- Convocadas (${convocadas.size})", style = MaterialTheme.typography.titleSmall, color = com.example.entrenamientos.ui.theme.SuccessGreen, fontWeight = FontWeight.Bold)
                                                 Spacer(modifier = Modifier.height(4.dp))
@@ -575,7 +620,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                                                     val displayName = if (p.lastName.isNotBlank()) "${p.name} ${p.lastName}" else p.name
                                                     Column(modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)) {
                                                         Text(displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                                        Text("Motivo: ${match.unsummonedReasons[p.id.toString()]?.takeIf { it.isNotBlank() } ?: "Sin motivo especificado"}", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray) // <--- Corregido a .toString()
+                                                        Text("Motivo: ${match.unsummonedReasons[p.id.toString()]?.takeIf { it.isNotBlank() } ?: "Sin motivo especificado"}", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
                                                     }
                                                 }
                                             }
