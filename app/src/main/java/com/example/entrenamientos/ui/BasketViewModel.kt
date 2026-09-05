@@ -126,6 +126,12 @@ class BasketViewModel @Inject constructor(
         }
 
     init {
+        // ACTIVAR LA PERSISTENCIA OFFLINE DE FIRESTORE
+        val settings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
+            .setPersistenceEnabled(true)
+            .build()
+        db.firestoreSettings = settings
+
         auth.addAuthStateListener(authStateListener)
     }
 
@@ -1148,21 +1154,24 @@ class BasketViewModel @Inject constructor(
             }
     }
 
-    fun deleteAttendances(attendances: List<com.example.entrenamientos.data.Attendance>) {
+    fun deleteAttendances(attendances: List<Attendance>) {
         val userRef = userDoc ?: return
         val batch = db.batch()
 
         attendances.forEach { attendance ->
-            val docRef = userRef.collection("attendances").document(attendance.id.toString())
+            // El ID que usamos en Firestore para las asistencias es "${date}_${playerId}"
+            val docRef = userRef.collection("attendances")
+                .document("${attendance.date}_${attendance.playerId}")
             batch.delete(docRef)
         }
 
         batch.commit().addOnSuccessListener {
-            // Actualizar la lista local eliminando los que coincidan con los IDs borrados
-            val deletedIds = attendances.map { it.id }
-            _attendances.value = _attendances.value.filterNot { it.id in deletedIds }
+            val datesAndPlayersToDelete = attendances.map { "${it.date}_${it.playerId}" }
+            _attendances.value = _attendances.value.filterNot {
+                "${it.date}_${it.playerId}" in datesAndPlayersToDelete
+            }
         }.addOnFailureListener {
-            // Manejar el error si es necesario
+            Log.e(TAG, "Error eliminando asistencias", it)
         }
     }
 
