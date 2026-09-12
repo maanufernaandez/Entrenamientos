@@ -848,6 +848,54 @@ class BasketViewModel @Inject constructor(
             }
     }
 
+    // Guarda (o borra, pasando photoPath = null) la ruta de la foto asociada
+    // a una nota de entrenamiento, sin tocar el texto (content) que ya tuviera.
+    fun updateTrainingNotePhoto(
+        date: String,
+        teamYear: Int,
+        type: String,
+        photoPath: String?,
+        existingNote: TrainingNote?
+    ) {
+
+        val user =
+            userDoc ?: return
+
+        val noteToSave =
+            existingNote?.copy(photoPath = photoPath)
+                ?: TrainingNote(
+                    date = date,
+                    teamYear = teamYear,
+                    noteType = type,
+                    photoPath = photoPath
+                )
+
+        val docId =
+            "${date}_${teamYear}_${type}"
+
+        user.collection("training_notes")
+            .document(docId)
+            .set(noteToSave)
+            .addOnSuccessListener {
+
+                _trainingNotes.value =
+                    _trainingNotes.value
+                        .filterNot {
+                            it.date == date &&
+                                    it.teamYear == teamYear &&
+                                    it.noteType == type
+                        } + noteToSave
+            }
+            .addOnFailureListener { error ->
+
+                Log.e(
+                    TAG,
+                    "Error guardando la foto de la nota de entrenamiento",
+                    error
+                )
+            }
+    }
+
     fun getTrainingNoteForDateAndTeam(
         date: String,
         year: Int,

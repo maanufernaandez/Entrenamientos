@@ -5,5 +5,6 @@ data class TrainingNote(
     val date: String = "",
     val teamYear: Int = 0,
     val noteType: String = "",
-    val content: String = ""
+    val content: String = "",
+    val photoPath: String? = null
 )

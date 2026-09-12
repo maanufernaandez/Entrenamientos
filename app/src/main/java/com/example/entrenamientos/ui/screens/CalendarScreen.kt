@@ -538,20 +538,6 @@ fun DayOptionsDialog(
                             ) {
                                 Text(attendanceLabel, color = Color.White, maxLines = 1, fontSize = fontSizeBtn)
                             }
-
-                            Button(
-                                onClick = {
-                                    viewModel.setSelectedTeamYear(teamYearLoop)
-                                    viewModel.setSelectedDate(date.toString())
-                                    onDismiss()
-                                    navController.navigate("notes/OTROS")
-                                },
-                                modifier = trainingBtnModifier,
-                                colors = ButtonDefaults.buttonColors(containerColor = teamColor),
-                                contentPadding = btnPadding
-                            ) {
-                                Text("Notas", color = Color.White, maxLines = 1, fontSize = fontSizeBtn)
-                            }
                         }
                     }
                 }
