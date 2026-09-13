@@ -57,12 +57,8 @@ dependencies {
     // Navegación
     implementation(libs.navigation.compose)
 
-    // Base de Datos (Room)
-    implementation(libs.room.runtime)
-    implementation(libs.room.ktx)
     implementation(libs.androidx.navigation.runtime.android)
     implementation(libs.androidx.foundation.layout.android)
-    kapt(libs.room.compiler)
 
     // Inyección de Dependencias (Hilt)
     implementation(libs.hilt.android)

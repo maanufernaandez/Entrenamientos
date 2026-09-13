@@ -9,7 +9,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     // 1. Instanciamos el ViewModel de Autenticación
-                    val authViewModel: AuthViewModel = viewModel()
+                    val authViewModel: AuthViewModel = hiltViewModel()
 
                     // 2. Observamos si el usuario ya tiene la sesión iniciada
                     val isUserLoggedIn by authViewModel.isUserLoggedIn.collectAsState()

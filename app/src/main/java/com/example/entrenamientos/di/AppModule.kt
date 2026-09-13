@@ -12,14 +12,12 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    @Suppress("unused")
     @Provides
     @Singleton
     fun provideFirebaseAuth(): FirebaseAuth {
         return FirebaseAuth.getInstance()
     }
 
-    @Suppress("unused")
     @Provides
     @Singleton
     fun provideFirebaseFirestore(): FirebaseFirestore {

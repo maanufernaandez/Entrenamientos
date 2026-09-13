@@ -96,14 +96,14 @@ fun LoginScreen(
             onClick = { showForgotPassDialog = true },
             contentPadding = PaddingValues(0.dp)
         ) {
-            Text("He olvidado la contraseña", color = Color(0xFF2196F3), fontWeight = FontWeight.Bold)
+            Text("He olvidado la contraseña", color = com.example.entrenamientos.ui.theme.LinkBlue, fontWeight = FontWeight.Bold)
         }
 
         TextButton(
             onClick = onNavigateToRegister,
             contentPadding = PaddingValues(0.dp)
         ) {
-            Text("¿No tienes cuenta? Regístrate", color = Color(0xFF2196F3), fontWeight = FontWeight.Bold)
+            Text("¿No tienes cuenta? Regístrate", color = com.example.entrenamientos.ui.theme.LinkBlue, fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(48.dp))

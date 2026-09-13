@@ -685,8 +685,11 @@ class BasketViewModel @Inject constructor(
         val user =
             userDoc ?: return
 
+        // UUID en vez de System.currentTimeMillis(): dos altas muy seguidas
+        // (doble toque, lag de red) ya no pueden compartir el mismo ID y
+        // sobrescribirse una a la otra.
         val newId =
-            System.currentTimeMillis()
+            java.util.UUID.randomUUID().mostSignificantBits
 
         val player =
             Player(
@@ -1091,7 +1094,7 @@ class BasketViewModel @Inject constructor(
 
         // Guardado
         val scheduleToSave = if (newSchedule.id == 0L) {
-            newSchedule.copy(id = System.currentTimeMillis())
+            newSchedule.copy(id = java.util.UUID.randomUUID().mostSignificantBits)
         } else {
             newSchedule
         }
@@ -1286,7 +1289,7 @@ class BasketViewModel @Inject constructor(
             if (match.id == 0L) {
 
                 match.copy(
-                    id = System.currentTimeMillis()
+                    id = java.util.UUID.randomUUID().mostSignificantBits
                 )
 
             } else {

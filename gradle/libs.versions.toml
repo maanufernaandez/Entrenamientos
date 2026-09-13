@@ -10,10 +10,7 @@ material = "1.12.0"
 activity = "1.9.1"
 constraintlayout = "2.1.4"
 hilt = "2.51.1"
-room = "2.6.1"
 navigation = "2.7.7"
-roomCommonJvm = "2.6.1"
-roomRuntimeAndroid = "2.6.1"
 foundationLayoutAndroid = "1.6.8"
 composeIcons = "1.6.8"
 material3Android = "1.2.1"
@@ -31,11 +28,6 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3",
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "composeIcons" }
 navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
 
-# Room (Base de datos local)
-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
-
 # Hilt (Inyección de dependencias)
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
@@ -48,4 +40,3 @@ androidx-foundation-layout-android = { group = "androidx.compose.foundation", na
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
-

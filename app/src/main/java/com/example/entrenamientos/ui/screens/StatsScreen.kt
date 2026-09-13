@@ -180,7 +180,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
             }
 
             // =================================================================================
-            // MOTOR DE GENERACIÓN DE SEMANAS (basado en el horario real de entrenamientos)
+            // MOTOR DE GENERACIÓN DE SEMANAS (extraído a AttendanceWeekCalculator, con tests)
             // =================================================================================
             val firstTrainingStr = activeTeamObj?.firstTrainingDate?.takeIf { it.isNotBlank() } ?: "2026-09-01"
             val firstTrainingDate = try { java.time.LocalDate.parse(firstTrainingStr) } catch (_: Exception) { java.time.LocalDate.of(2026, 9, 1) }
@@ -189,63 +189,19 @@ fun StatsScreen(viewModel: BasketViewModel) {
             val lastTrainingDate = try { java.time.LocalDate.parse(lastTrainingStr) } catch (_: Exception) { java.time.LocalDate.of(2027, 5, 31) }
 
             val teamSchedules = schedules.filter { it.teamYear == selectedTeam }
-            val holidaySet = holidays.map { it.date }.toSet()
 
-            // ¿Hay al menos un día de entrenamiento REAL esa semana? Es decir: un día
-            // que coincida con el horario configurado del equipo, esté dentro del
-            // rango [firstTrainingDate, lastTrainingDate] y no sea festivo.
-            fun hasRealTrainingInWeek(weekStart: java.time.LocalDate): Boolean {
-                if (teamSchedules.isEmpty()) return false
-                return (0..6).any { offset ->
-                    val day = weekStart.plusDays(offset.toLong())
-                    !day.isBefore(firstTrainingDate) &&
-                            !day.isAfter(lastTrainingDate) &&
-                            !holidaySet.contains(day.toString()) &&
-                            teamSchedules.any { it.dayOfWeek == day.dayOfWeek.value }
-                }
-            }
+            val validWeeks = com.example.entrenamientos.logic.AttendanceWeekCalculator.calculateValidWeeks(
+                attendanceDates = attendances.map { it.date },
+                scheduleDaysOfWeek = teamSchedules.map { it.dayOfWeek },
+                holidayDates = holidays.map { it.date }.toSet(),
+                firstTrainingDate = firstTrainingDate,
+                lastTrainingDate = lastTrainingDate,
+                today = java.time.LocalDate.now()
+            )
 
             // Agrupamos las asistencias que SÍ existen en la base de datos
             val attendancesByWeek = attendances.groupBy {
                 java.time.LocalDate.parse(it.date).with(java.time.DayOfWeek.MONDAY)
-            }
-
-            // Usamos SIEMPRE la semana real de hoy como límite. Antes se "simulaba"
-            // avanzar el calendario si había una asistencia con fecha futura, lo que
-            // hacía aparecer semanas que todavía no habían llegado.
-            val todayReal = java.time.LocalDate.now()
-            val currentWeek = todayReal.with(java.time.DayOfWeek.MONDAY)
-
-            val validWeeks = mutableSetOf<java.time.LocalDate>()
-
-            // 1. Añadir siempre las semanas que YA tienen asistencias guardadas
-            //    (permite completar la asistencia de un día antes de que llegue su semana).
-            validWeeks.addAll(attendancesByWeek.keys)
-
-            // 2. Generar todas las semanas candidatas desde el inicio de temporada
-            //    hasta la semana actual (incluida, aunque aún no se haya
-            //    completado ningún día de esa semana).
-            var tempWeek = firstTrainingDate.with(java.time.DayOfWeek.MONDAY)
-            if (!tempWeek.isAfter(currentWeek)) {
-                var limit = 0
-                while (!tempWeek.isAfter(currentWeek) && limit < 200) {
-                    validWeeks.add(tempWeek)
-                    tempWeek = tempWeek.plusWeeks(1)
-                    limit++
-                }
-            }
-
-            // 3. FILTRO FINAL: una semana solo se muestra si, ADEMÁS de estar dentro
-            //    del rango de temporada del equipo (nunca antes de firstTrainingDate
-            //    ni después de lastTrainingDate, pase lo que pase con los datos),
-            //    ya tiene asistencias guardadas o contiene un día de entrenamiento
-            //    real según el horario configurado. Esto elimina semanas "fantasma"
-            //    tanto por horario como por datos sueltos fuera de temporada.
-            validWeeks.retainAll { weekStart ->
-                val weekEndSunday = weekStart.plusDays(6)
-                val weekWithinSeason = !weekEndSunday.isBefore(firstTrainingDate) && !weekStart.isAfter(lastTrainingDate)
-
-                weekWithinSeason && (attendancesByWeek.containsKey(weekStart) || hasRealTrainingInWeek(weekStart))
             }
 
             val monthToWeeksMap = mutableMapOf<java.time.YearMonth, MutableList<Pair<java.time.LocalDate, List<com.example.entrenamientos.data.Attendance>>>>()
