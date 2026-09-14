@@ -2,7 +2,6 @@ package com.example.entrenamientos.ui.screens
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -32,23 +30,10 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 
-// Lado más largo de la foto guardada, en píxeles. 900px es de sobra para
-// verla bien en el móvil sin disparar el tamaño del documento de Firestore.
 private const val MAX_PHOTO_DIMENSION = 900
-
-// Tamaño objetivo (en bytes, antes de Base64) al comprimir la foto.
-// Firestore limita cada documento a 1 MB; Base64 añade ~33% de overhead,
-// así que nos quedamos con mucho margen por debajo de ese límite.
 private const val TARGET_PHOTO_BYTES = 300_000
 
-/**
- * Comprime y reduce el tamaño de una foto tomada con la cámara, y la
- * devuelve codificada en Base64, lista para guardar dentro de un documento
- * de Firestore (sin necesitar Firebase Storage).
- */
 private fun compressPhotoToBase64(file: File): String? {
-    // 1. Calculamos cuánto podemos reducir la imagen al decodificarla,
-    //    para no cargar en memoria una foto de varios megapíxeles entera.
     val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.absolutePath, boundsOptions)
 
@@ -63,7 +48,6 @@ private fun compressPhotoToBase64(file: File): String? {
     val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
     var bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOptions) ?: return null
 
-    // 2. Escalamos exactamente al tamaño máximo deseado.
     val longestSide = maxOf(bitmap.width, bitmap.height)
     if (longestSide > MAX_PHOTO_DIMENSION) {
         val scale = MAX_PHOTO_DIMENSION.toFloat() / longestSide
@@ -75,8 +59,6 @@ private fun compressPhotoToBase64(file: File): String? {
         )
     }
 
-    // 3. Comprimimos como JPEG, bajando la calidad hasta caber en el
-    //    tamaño objetivo (o hasta un mínimo razonable de calidad).
     var quality = 85
     var jpegBytes: ByteArray
     do {
@@ -106,7 +88,6 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
     val dayOfWeek = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
     val monthName = date.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
 
-    // Lógica para obtener el color y la categoría completa del equipo
     val teamColor = team?.colorHex?.let {
         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
     } ?: Color.Black
@@ -127,12 +108,6 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
         genderStr
     }
 
-    // ------------------------------------------------------------
-    // FOTO DEL ENTRENAMIENTO (solo aplica al tipo "ENTRENAMIENTO")
-    // Se guarda comprimida y en Base64 DENTRO del propio documento de
-    // Firestore: viaja con el resto de datos del equipo (a diferencia de
-    // antes, ya sobrevive a desinstalar la app o cambiar de dispositivo).
-    // ------------------------------------------------------------
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -167,7 +142,7 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
                     } catch (_: Exception) {
                         null
                     }
-                    capturedFile.delete() // ya no necesitamos el archivo temporal
+                    capturedFile.delete()
                     result
                 }
 
@@ -187,9 +162,7 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
                     )
                 }
             }
-        } else if (capturedFile != null) {
-            capturedFile.delete()
-        }
+        } else capturedFile?.delete()
     }
 
     fun launchCamera() {
@@ -212,162 +185,166 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
         showPhotoDialog = false
     }
 
-    androidx.activity.compose.BackHandler {
+    // Gestionar el botón "Atrás" del móvil
+    // Si la foto está en grande, la cierra. Si no, vuelve al calendario.
+    androidx.activity.compose.BackHandler(enabled = showPhotoDialog) {
+        showPhotoDialog = false
+    }
+
+    androidx.activity.compose.BackHandler(enabled = !showPhotoDialog) {
         navController.popBackStack()
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(text = titlePrefix, style = MaterialTheme.typography.headlineMedium)
-        Text(text = "$dayOfWeek ${date.dayOfMonth} de $monthName", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+    // Un Box padre que contiene la pantalla normal y, encima, la previsualización de la foto
+    Box(modifier = Modifier.fillMaxSize()) {
 
-        Spacer(modifier = Modifier.height(8.dp))
+        // ------------------------------------------------------------
+        // PANTALLA NORMAL DE NOTAS
+        // ------------------------------------------------------------
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Text(text = titlePrefix, style = MaterialTheme.typography.headlineMedium)
+            Text(text = "$dayOfWeek ${date.dayOfMonth} de $monthName", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
 
-        // Categoría centrada y con el color del equipo
-        Text(
-            text = fullCategory,
-            style = MaterialTheme.typography.titleLarge,
-            color = teamColor,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = noteContent,
-            onValueChange = { noteContent = it },
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            placeholder = { Text("Escribe aquí...") },
-            textStyle = MaterialTheme.typography.bodyLarge
-        )
-
-        if (noteType == "ENTRENAMIENTO") {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (photoError != null) {
-                Text(photoError ?: "", color = com.example.entrenamientos.ui.theme.AttendanceRed, style = MaterialTheme.typography.bodySmall)
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-
-            when {
-                isProcessingPhoto -> {
-                    OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Procesando foto...")
-                    }
-                }
-                hasPhoto -> {
-                    OutlinedButton(
-                        onClick = { showPhotoDialog = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Photo, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Ver Foto")
-                    }
-                }
-                else -> {
-                    OutlinedButton(
-                        onClick = { launchCamera() },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Sacar Foto")
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = { navController.popBackStack() },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
-            ) { Text("Cancelar", color = Color.White) }
-
-            Button(
-                onClick = {
-                    viewModel.saveTrainingNote(date = dateStr, teamYear = teamYear, type = noteType, content = noteContent, existingNote = existingNote)
-                    navController.popBackStack()
-                },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-            ) { Text("Guardar", color = Color.Black) }
-        }
-    }
-
-    // ------------------------------------------------------------
-    // DIÁLOGO PARA VER / ELIMINAR LA FOTO
-    // ------------------------------------------------------------
-    if (showPhotoDialog && hasPhoto) {
-        val bitmap = remember(photoBase64) {
-            try {
-                val bytes = Base64.decode(photoBase64, Base64.DEFAULT)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            } catch (_: Exception) {
-                null
-            }
-        }
-
-        Dialog(
-            onDismissRequest = { showPhotoDialog = false },
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
+            Text(
+                text = fullCategory,
+                style = MaterialTheme.typography.titleLarge,
+                color = teamColor,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color.Black
-            ) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .statusBarsPadding(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (bitmap != null) {
-                            Image(
-                                bitmap = bitmap.asImageBitmap(),
-                                contentDescription = "Foto del entrenamiento",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
-                            )
-                        } else {
-                            Text("No se ha podido cargar la foto.", color = Color.White)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = noteContent,
+                onValueChange = { noteContent = it },
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                placeholder = { Text("Escribe aquí...") },
+                textStyle = MaterialTheme.typography.bodyLarge
+            )
+
+            if (noteType == "ENTRENAMIENTO") {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (photoError != null) {
+                    Text(photoError ?: "", color = com.example.entrenamientos.ui.theme.AttendanceRed, style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                when {
+                    isProcessingPhoto -> {
+                        OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Procesando foto...")
                         }
                     }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.Black)
-                            .navigationBarsPadding()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { showPhotoDialog = false },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                        ) { Text("Cerrar", color = Color.White) }
-
-                        Button(
-                            onClick = { deletePhoto() },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                    hasPhoto -> {
+                        OutlinedButton(
+                            onClick = { showPhotoDialog = true },
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Eliminar", color = Color.White)
+                            Icon(Icons.Default.Photo, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Ver Foto")
                         }
+                    }
+                    else -> {
+                        OutlinedButton(
+                            onClick = { launchCamera() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sacar Foto")
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { navController.popBackStack() },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                ) { Text("Cancelar", color = Color.White) }
+
+                Button(
+                    onClick = {
+                        viewModel.saveTrainingNote(date = dateStr, teamYear = teamYear, type = noteType, content = noteContent, existingNote = existingNote)
+                        navController.popBackStack()
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                ) { Text("Guardar", color = Color.Black) }
+            }
+        }
+
+        // ------------------------------------------------------------
+        // CAPA SUPERIOR: VISOR DE FOTO A PANTALLA COMPLETA
+        // (Sustituye al problemático Dialog)
+        // ------------------------------------------------------------
+        if (showPhotoDialog && hasPhoto) {
+            val bitmap = remember(photoBase64) {
+                try {
+                    val bytes = Base64.decode(photoBase64, Base64.DEFAULT)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    // Añadimos el inset padding nativo para evitar solapes con notch/barras en teléfonos "edge-to-edge"
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Foto del entrenamiento",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                        )
+                    } else {
+                        Text("No se ha podido cargar la foto.", color = Color.White)
+                    }
+                }
+
+                // Aquí están los botones. Respetan un margen de 16dp desde abajo, garantizando que no se cortan.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { showPhotoDialog = false },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                    ) { Text("Cerrar", color = Color.White) }
+
+                    Button(
+                        onClick = { deletePhoto() },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Eliminar", color = Color.White)
                     }
                 }
             }

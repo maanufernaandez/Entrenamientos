@@ -3,23 +3,6 @@ package com.example.entrenamientos.logic
 import java.time.DayOfWeek
 import java.time.LocalDate
 
-/**
- * Calcula qué semanas (representadas por el lunes de esa semana) deben
- * mostrarse en el desplegable de "Asistencia Mensual/Semanal" del Panel de
- * Estadísticas.
- *
- * Una semana se muestra si:
- *  - Está dentro del rango de temporada del equipo [firstTrainingDate, lastTrainingDate], Y
- *  - (ya tiene alguna asistencia guardada para esa semana) O (contiene de verdad
- *    un día de entrenamiento real: coincide con el horario configurado, está
- *    dentro del rango de temporada, y no es festivo).
- *
- * No se generan semanas futuras más allá de la semana actual (la del "hoy"
- * real), salvo que ya tengan asistencia guardada de antemano.
- *
- * Es una función pura (sin Compose, sin ViewModel, sin Android) para poder
- * testearla con JUnit normal en app/src/test, sin necesitar emulador.
- */
 object AttendanceWeekCalculator {
 
     fun calculateValidWeeks(

@@ -20,7 +20,7 @@ class AuthViewModel @Inject constructor(
 
     // Validar contraseña: entre 8 y 20 caracteres, con al menos 1 mayúscula
     // y 1 minúscula.
-    fun isPasswordValid(password: String): Boolean {
+    private fun isPasswordValid(password: String): Boolean {
         if (password.length !in 8..20) return false
         val hasUpperCase = password.any { it.isUpperCase() }
         val hasLowerCase = password.any { it.isLowerCase() }

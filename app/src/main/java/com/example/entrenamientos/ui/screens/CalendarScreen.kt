@@ -58,7 +58,6 @@ fun CalendarScreen(
 ) {
     val teamsList by viewModel.teams.collectAsState()
     val schedules by viewModel.schedules.collectAsState()
-    val allMatches by viewModel.matches.collectAsState()
 
     val minMonth = remember(teamsList) {
         val earliest = teamsList
@@ -592,8 +591,6 @@ fun DayOptionsDialog(
 
                         val convocatoriaGuardada = match.isConvocatoriaSaved
                         val convocatoriaEnabled = convocatoriaGuardada || canMake
-                        val quintetosEnabled = convocatoriaGuardada
-                        val resultadoEnabled = convocatoriaGuardada
                         val matchButtonModifier = Modifier.fillMaxWidth().height(btnHeight)
 
                         if (!convocatoriaEnabled) {
@@ -636,12 +633,20 @@ fun DayOptionsDialog(
                                     onDismiss()
                                     navController.navigate("quintetos")
                                 },
-                                enabled = quintetosEnabled,
+                                enabled = convocatoriaGuardada,
                                 modifier = matchButtonModifier,
-                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = matchTeamColor,
+                                    disabledContainerColor = Color.LightGray
+                                ),
                                 contentPadding = btnPadding
                             ) {
-                                Text("Quintetos", color = Color.White, maxLines = 1, fontSize = fontSizeBtn)
+                                Text(
+                                    "Quintetos",
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    fontSize = fontSizeBtn
+                                )
                             }
 
                             Button(
@@ -651,9 +656,12 @@ fun DayOptionsDialog(
                                     onDismiss()
                                     navController.navigate("resultado")
                                 },
-                                enabled = resultadoEnabled,
+                                enabled = convocatoriaGuardada,
                                 modifier = matchButtonModifier,
-                                colors = ButtonDefaults.buttonColors(containerColor = matchTeamColor, disabledContainerColor = Color.LightGray),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = matchTeamColor,
+                                    disabledContainerColor = Color.LightGray
+                                ),
                                 contentPadding = btnPadding
                             ) {
                                 Text(
