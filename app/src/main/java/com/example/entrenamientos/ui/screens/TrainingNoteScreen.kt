@@ -1,10 +1,13 @@
 package com.example.entrenamientos.ui.screens
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
@@ -23,7 +26,68 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.entrenamientos.ui.BasketViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
+
+// Lado más largo de la foto guardada, en píxeles. 900px es de sobra para
+// verla bien en el móvil sin disparar el tamaño del documento de Firestore.
+private const val MAX_PHOTO_DIMENSION = 900
+
+// Tamaño objetivo (en bytes, antes de Base64) al comprimir la foto.
+// Firestore limita cada documento a 1 MB; Base64 añade ~33% de overhead,
+// así que nos quedamos con mucho margen por debajo de ese límite.
+private const val TARGET_PHOTO_BYTES = 300_000
+
+/**
+ * Comprime y reduce el tamaño de una foto tomada con la cámara, y la
+ * devuelve codificada en Base64, lista para guardar dentro de un documento
+ * de Firestore (sin necesitar Firebase Storage).
+ */
+private fun compressPhotoToBase64(file: File): String? {
+    // 1. Calculamos cuánto podemos reducir la imagen al decodificarla,
+    //    para no cargar en memoria una foto de varios megapíxeles entera.
+    val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, boundsOptions)
+
+    var sampleSize = 1
+    while (
+        boundsOptions.outWidth / sampleSize > MAX_PHOTO_DIMENSION * 2 ||
+        boundsOptions.outHeight / sampleSize > MAX_PHOTO_DIMENSION * 2
+    ) {
+        sampleSize *= 2
+    }
+
+    val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+    var bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOptions) ?: return null
+
+    // 2. Escalamos exactamente al tamaño máximo deseado.
+    val longestSide = maxOf(bitmap.width, bitmap.height)
+    if (longestSide > MAX_PHOTO_DIMENSION) {
+        val scale = MAX_PHOTO_DIMENSION.toFloat() / longestSide
+        bitmap = Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * scale).toInt().coerceAtLeast(1),
+            (bitmap.height * scale).toInt().coerceAtLeast(1),
+            true
+        )
+    }
+
+    // 3. Comprimimos como JPEG, bajando la calidad hasta caber en el
+    //    tamaño objetivo (o hasta un mínimo razonable de calidad).
+    var quality = 85
+    var jpegBytes: ByteArray
+    do {
+        val stream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
+        jpegBytes = stream.toByteArray()
+        quality -= 15
+    } while (jpegBytes.size > TARGET_PHOTO_BYTES && quality > 20)
+
+    return Base64.encodeToString(jpegBytes, Base64.DEFAULT)
+}
 
 @Composable
 fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navController: NavController, noteType: String) {
@@ -65,58 +129,85 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
 
     // ------------------------------------------------------------
     // FOTO DEL ENTRENAMIENTO (solo aplica al tipo "ENTRENAMIENTO")
+    // Se guarda comprimida y en Base64 DENTRO del propio documento de
+    // Firestore: viaja con el resto de datos del equipo (a diferencia de
+    // antes, ya sobrevive a desinstalar la app o cambiar de dispositivo).
     // ------------------------------------------------------------
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    // Ruta guardada en la nota; se sincroniza con Firestore, pero el propio
-    // archivo de la foto vive solo en este dispositivo.
-    var photoPath by remember(existingNote) { mutableStateOf(existingNote?.photoPath) }
-    val photoFile = remember(photoPath) { photoPath?.let { File(it) } }
-    val hasPhoto = photoFile != null && photoFile.exists()
+    var photoBase64 by remember(existingNote) { mutableStateOf(existingNote?.photoBase64) }
+    val hasPhoto = !photoBase64.isNullOrBlank()
 
-    var pendingPhotoFile by remember { mutableStateOf<File?>(null) }
+    var isProcessingPhoto by remember { mutableStateOf(false) }
+    var pendingCaptureFile by remember { mutableStateOf<File?>(null) }
     var showPhotoDialog by remember { mutableStateOf(false) }
+    var photoError by remember { mutableStateOf<String?>(null) }
 
-    fun createPhotoFile(): File {
-        val dir = File(context.filesDir, "training_photos")
+    fun createTempCaptureFile(): File {
+        val dir = File(context.cacheDir, "training_photos_tmp")
         if (!dir.exists()) dir.mkdirs()
-        // Siempre el mismo nombre por día+equipo: una foto nueva sustituye a la anterior.
-        return File(dir, "entrenamiento_${dateStr}_${teamYear}.jpg")
+        return File(dir, "capture_${System.currentTimeMillis()}.jpg")
     }
 
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
-        if (success && pendingPhotoFile != null) {
-            val savedPath = pendingPhotoFile!!.absolutePath
-            photoPath = savedPath
-            viewModel.updateTrainingNotePhoto(
-                date = dateStr,
-                teamYear = teamYear,
-                type = noteType,
-                photoPath = savedPath,
-                existingNote = existingNote
-            )
+        val capturedFile = pendingCaptureFile
+        pendingCaptureFile = null
+
+        if (success && capturedFile != null) {
+            isProcessingPhoto = true
+            photoError = null
+
+            scope.launch {
+                val base64 = withContext(Dispatchers.IO) {
+                    val result = try {
+                        compressPhotoToBase64(capturedFile)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    capturedFile.delete() // ya no necesitamos el archivo temporal
+                    result
+                }
+
+                isProcessingPhoto = false
+
+                if (base64 == null) {
+                    photoError = "No se ha podido procesar la foto. Inténtalo de nuevo."
+                } else {
+                    photoBase64 = base64
+                    viewModel.updateTrainingNotePhoto(
+                        date = dateStr,
+                        teamYear = teamYear,
+                        type = noteType,
+                        photoBase64 = base64,
+                        existingNote = existingNote,
+                        onError = { msg -> photoError = msg }
+                    )
+                }
+            }
+        } else if (capturedFile != null) {
+            capturedFile.delete()
         }
-        pendingPhotoFile = null
     }
 
     fun launchCamera() {
-        val file = createPhotoFile()
+        val file = createTempCaptureFile()
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        pendingPhotoFile = file
+        pendingCaptureFile = file
         takePictureLauncher.launch(uri)
     }
 
     fun deletePhoto() {
-        photoFile?.delete()
-        photoPath = null
+        photoBase64 = null
         viewModel.updateTrainingNotePhoto(
             date = dateStr,
             teamYear = teamYear,
             type = noteType,
-            photoPath = null,
-            existingNote = existingNote
+            photoBase64 = null,
+            existingNote = existingNote,
+            onError = { msg -> photoError = msg }
         )
         showPhotoDialog = false
     }
@@ -154,23 +245,38 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
         if (noteType == "ENTRENAMIENTO") {
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (hasPhoto) {
-                OutlinedButton(
-                    onClick = { showPhotoDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Photo, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Ver Foto")
+            if (photoError != null) {
+                Text(photoError ?: "", color = com.example.entrenamientos.ui.theme.AttendanceRed, style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            when {
+                isProcessingPhoto -> {
+                    OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Procesando foto...")
+                    }
                 }
-            } else {
-                OutlinedButton(
-                    onClick = { launchCamera() },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sacar Foto")
+                hasPhoto -> {
+                    OutlinedButton(
+                        onClick = { showPhotoDialog = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Photo, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Ver Foto")
+                    }
+                }
+                else -> {
+                    OutlinedButton(
+                        onClick = { launchCamera() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Sacar Foto")
+                    }
                 }
             }
         }
@@ -199,29 +305,54 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
     // DIÁLOGO PARA VER / ELIMINAR LA FOTO
     // ------------------------------------------------------------
     if (showPhotoDialog && hasPhoto) {
-        val bitmap = remember(photoPath) {
-            BitmapFactory.decodeFile(photoFile!!.absolutePath)
+        val bitmap = remember(photoBase64) {
+            try {
+                val bytes = Base64.decode(photoBase64, Base64.DEFAULT)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (_: Exception) {
+                null
+            }
         }
 
-        Dialog(onDismissRequest = { showPhotoDialog = false }) {
-            Card(shape = MaterialTheme.shapes.medium) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "Foto del entrenamiento",
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)
-                        )
-                    } else {
-                        Text("No se ha podido cargar la foto.")
+        Dialog(
+            onDismissRequest = { showPhotoDialog = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Black
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .statusBarsPadding(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Foto del entrenamiento",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                            )
+                        } else {
+                            Text("No se ha podido cargar la foto.", color = Color.White)
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Black)
+                            .navigationBarsPadding()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Button(
                             onClick = { showPhotoDialog = false },
                             modifier = Modifier.weight(1f),

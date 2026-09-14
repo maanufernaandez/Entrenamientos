@@ -133,25 +133,31 @@ fun ResultadoScreen(
             OutlinedTextField(
                 value = resLocal,
                 onValueChange = {
-                    resLocal = it
+                    if (it.all(Char::isDigit)) resLocal = it
                 },
                 label = {
                     Text("Local")
                 },
                 modifier = Modifier.weight(1f),
-                singleLine = true
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                )
             )
 
             OutlinedTextField(
                 value = resVisitor,
                 onValueChange = {
-                    resVisitor = it
+                    if (it.all(Char::isDigit)) resVisitor = it
                 },
                 label = {
                     Text("Visitante")
                 },
                 modifier = Modifier.weight(1f),
-                singleLine = true
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                )
             )
         }
 
@@ -180,25 +186,31 @@ fun ResultadoScreen(
             OutlinedTextField(
                 value = ftMade,
                 onValueChange = {
-                    ftMade = it
+                    if (it.all(Char::isDigit)) ftMade = it
                 },
                 label = {
                     Text("Convertidos")
                 },
                 modifier = Modifier.weight(1f),
-                singleLine = true
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                )
             )
 
             OutlinedTextField(
                 value = ftAttempted,
                 onValueChange = {
-                    ftAttempted = it
+                    if (it.all(Char::isDigit)) ftAttempted = it
                 },
                 label = {
                     Text("Intentados")
                 },
                 modifier = Modifier.weight(1f),
-                singleLine = true
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                )
             )
         }
 

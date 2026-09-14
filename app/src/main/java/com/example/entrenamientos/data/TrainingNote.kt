@@ -6,5 +6,5 @@ data class TrainingNote(
     val teamYear: Int = 0,
     val noteType: String = "",
     val content: String = "",
-    val photoPath: String? = null
+    val photoBase64: String? = null
 )

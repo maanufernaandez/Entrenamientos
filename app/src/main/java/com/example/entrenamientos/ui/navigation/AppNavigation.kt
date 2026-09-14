@@ -64,8 +64,8 @@ fun AppNavigation(onLogout: () -> Unit = {}) {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentDestination = navBackStackEntry?.destination
 
-            val selectedBlue = Color(0xFF2196F3)
-            val unselectedLightBlue = Color(0xFFE3F2FD)
+            val selectedBlue = com.example.entrenamientos.ui.theme.LinkBlue
+            val unselectedLightBlue = com.example.entrenamientos.ui.theme.NavUnselectedBackground
 
             val calendarSubRoutes = listOf("attendance", "convocatoria", "resultado", "quintetos")
 

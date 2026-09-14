@@ -19,3 +19,7 @@ val SuccessGreen = Color(0xFF2E7D32)
 // nombre semántico propio para no acoplar el color de una categoría de
 // equipo a la UI de autenticación.
 val LinkBlue = Color(0xFF2196F3)
+
+// Fondo azul claro del botón NO seleccionado en la barra de navegación
+// inferior (mismo tono que LinkBlue, pero muy aclarado).
+val NavUnselectedBackground = Color(0xFFE3F2FD)

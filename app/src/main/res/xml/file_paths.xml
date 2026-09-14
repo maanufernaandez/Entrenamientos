@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Carpeta interna donde se guardan las fotos de los entrenamientos -->
-    <files-path name="training_photos" path="training_photos/" />
+    <!-- Carpeta temporal donde la cámara escribe la foto justo antes de
+         comprimirla y guardarla en Firestore. Se borra en cuanto se procesa. -->
+    <cache-path name="training_photos_tmp" path="training_photos_tmp/" />
 </paths>

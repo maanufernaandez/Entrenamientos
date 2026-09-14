@@ -857,20 +857,28 @@ class BasketViewModel @Inject constructor(
         date: String,
         teamYear: Int,
         type: String,
-        photoPath: String?,
-        existingNote: TrainingNote?
+        photoBase64: String?,
+        existingNote: TrainingNote?,
+        onError: (String) -> Unit = {}
     ) {
 
         val user =
             userDoc ?: return
 
+        // Margen de seguridad respecto al límite de 1 MB por documento de
+        // Firestore (dejamos hueco para el resto de campos del documento).
+        if (photoBase64 != null && photoBase64.length > 900_000) {
+            onError("La foto es demasiado grande para guardarla. Vuelve a intentarlo.")
+            return
+        }
+
         val noteToSave =
-            existingNote?.copy(photoPath = photoPath)
+            existingNote?.copy(photoBase64 = photoBase64)
                 ?: TrainingNote(
                     date = date,
                     teamYear = teamYear,
                     noteType = type,
-                    photoPath = photoPath
+                    photoBase64 = photoBase64
                 )
 
         val docId =
@@ -896,6 +904,8 @@ class BasketViewModel @Inject constructor(
                     "Error guardando la foto de la nota de entrenamiento",
                     error
                 )
+
+                onError("No se pudo guardar la foto: ${error.message}")
             }
     }
 
