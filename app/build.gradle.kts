@@ -77,4 +77,7 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.5.2")
 
     implementation("androidx.compose.material:material-icons-extended")
+
+    // Lectura de orientación EXIF de fotos tomadas con la cámara
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 }

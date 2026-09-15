@@ -2,6 +2,7 @@ package com.example.entrenamientos.ui.screens
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -9,9 +10,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,6 +24,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.exifinterface.media.ExifInterface
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.entrenamientos.ui.BasketViewModel
@@ -32,6 +36,49 @@ import java.io.File
 
 private const val MAX_PHOTO_DIMENSION = 900
 private const val TARGET_PHOTO_BYTES = 300_000
+
+private fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
+    if (degrees == 0f) return bitmap
+    val matrix = Matrix().apply { postRotate(degrees) }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+}
+
+private fun exifRotationDegrees(file: File): Float {
+    return try {
+        val exif = ExifInterface(file.absolutePath)
+        when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+    } catch (_: Exception) {
+        0f
+    }
+}
+
+private fun compressBitmapToBase64(bitmap: Bitmap): String {
+    var quality = 85
+    var jpegBytes: ByteArray
+    do {
+        val stream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
+        jpegBytes = stream.toByteArray()
+        quality -= 15
+    } while (jpegBytes.size > TARGET_PHOTO_BYTES && quality > 20)
+
+    return Base64.encodeToString(jpegBytes, Base64.DEFAULT)
+}
+
+private fun rotateStoredPhoto(currentBase64: String, degrees: Float): String? {
+    return try {
+        val bytes = Base64.decode(currentBase64, Base64.DEFAULT)
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        compressBitmapToBase64(rotateBitmap(bitmap, degrees))
+    } catch (_: Exception) {
+        null
+    }
+}
 
 private fun compressPhotoToBase64(file: File): String? {
     val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -48,6 +95,11 @@ private fun compressPhotoToBase64(file: File): String? {
     val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
     var bitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOptions) ?: return null
 
+    // Corregimos la orientación ANTES de escalar, para que el recorte a
+    // MAX_PHOTO_DIMENSION se calcule ya sobre las dimensiones correctas
+    // (una foto vertical girada 90° tiene ancho/alto intercambiados).
+    bitmap = rotateBitmap(bitmap, exifRotationDegrees(file))
+
     val longestSide = maxOf(bitmap.width, bitmap.height)
     if (longestSide > MAX_PHOTO_DIMENSION) {
         val scale = MAX_PHOTO_DIMENSION.toFloat() / longestSide
@@ -59,16 +111,7 @@ private fun compressPhotoToBase64(file: File): String? {
         )
     }
 
-    var quality = 85
-    var jpegBytes: ByteArray
-    do {
-        val stream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
-        jpegBytes = stream.toByteArray()
-        quality -= 15
-    } while (jpegBytes.size > TARGET_PHOTO_BYTES && quality > 20)
-
-    return Base64.encodeToString(jpegBytes, Base64.DEFAULT)
+    return compressBitmapToBase64(bitmap)
 }
 
 @Composable
@@ -115,6 +158,7 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
     val hasPhoto = !photoBase64.isNullOrBlank()
 
     var isProcessingPhoto by remember { mutableStateOf(false) }
+    var isRotatingPhoto by remember { mutableStateOf(false) }
     var pendingCaptureFile by remember { mutableStateOf<File?>(null) }
     var showPhotoDialog by remember { mutableStateOf(false) }
     var photoError by remember { mutableStateOf<String?>(null) }
@@ -170,6 +214,33 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         pendingCaptureFile = file
         takePictureLauncher.launch(uri)
+    }
+
+    fun rotatePhoto() {
+        val currentBase64 = photoBase64 ?: return
+        isRotatingPhoto = true
+
+        scope.launch {
+            val rotated = withContext(Dispatchers.Default) {
+                rotateStoredPhoto(currentBase64, 90f)
+            }
+
+            isRotatingPhoto = false
+
+            if (rotated == null) {
+                photoError = "No se ha podido girar la foto. Inténtalo de nuevo."
+            } else {
+                photoBase64 = rotated
+                viewModel.updateTrainingNotePhoto(
+                    date = dateStr,
+                    teamYear = teamYear,
+                    type = noteType,
+                    photoBase64 = rotated,
+                    existingNote = existingNote,
+                    onError = { msg -> photoError = msg }
+                )
+            }
+        }
     }
 
     fun deletePhoto() {
@@ -333,12 +404,29 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
                 ) {
                     Button(
                         onClick = { showPhotoDialog = false },
+                        enabled = !isRotatingPhoto,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
                     ) { Text("Cerrar", color = Color.White) }
 
                     Button(
+                        onClick = { rotatePhoto() },
+                        enabled = !isRotatingPhoto,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.LinkBlue)
+                    ) {
+                        if (isRotatingPhoto) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                        } else {
+                            Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Girar", color = Color.White)
+                        }
+                    }
+
+                    Button(
                         onClick = { deletePhoto() },
+                        enabled = !isRotatingPhoto,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
                     ) {
