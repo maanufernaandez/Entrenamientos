@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.entrenamientos.logic.MatchResultValidator
 import com.example.entrenamientos.ui.BasketViewModel
 import com.example.entrenamientos.ui.theme.AttendanceGreen
 import com.example.entrenamientos.ui.theme.AttendanceRed
@@ -111,6 +112,10 @@ fun ResultadoScreen(
         val made = ftMade.toIntOrNull() ?: 0
         val attempted = ftAttempted.toIntOrNull() ?: 0
         if (attempted > 0) (made * 100f / attempted).let { "%.0f".format(it) } else null
+    }
+
+    val ftError = remember(ftMade, ftAttempted) {
+        MatchResultValidator.validateFreeThrows(ftMade, ftAttempted)
     }
 
     fun goToCalendar() {
@@ -232,7 +237,7 @@ fun ResultadoScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Tiros libres", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        if (ftPercentage != null) {
+                        if (ftPercentage != null && ftError == null) {
                             Text(
                                 text = "$ftPercentage %",
                                 style = MaterialTheme.typography.titleSmall,
@@ -249,6 +254,7 @@ fun ResultadoScreen(
                             value = ftMade,
                             onValueChange = { if (it.length <= 3 && it.all(Char::isDigit)) ftMade = it },
                             label = { Text("Convertidos") },
+                            isError = ftError != null,
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -257,9 +263,19 @@ fun ResultadoScreen(
                             value = ftAttempted,
                             onValueChange = { if (it.length <= 3 && it.all(Char::isDigit)) ftAttempted = it },
                             label = { Text("Intentados") },
+                            isError = ftError != null,
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+
+                    if (ftError != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = ftError,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }
@@ -310,17 +326,24 @@ fun ResultadoScreen(
 
             Button(
                 onClick = {
-                    val localScore = resLocal.toIntOrNull()
-                    val visitorScore = resVisitor.toIntOrNull()
+                    val validationError = MatchResultValidator.validate(
+                        resLocal = resLocal,
+                        resVisitor = resVisitor,
+                        ftMade = ftMade,
+                        ftAttempted = ftAttempted
+                    )
 
-                    if (localScore != null && visitorScore != null && localScore == visitorScore) {
+                    if (validationError != null) {
                         android.widget.Toast.makeText(
                             navController.context,
-                            "El resultado no puede ser empate",
-                            android.widget.Toast.LENGTH_SHORT
+                            validationError,
+                            android.widget.Toast.LENGTH_LONG
                         ).show()
                         return@Button
                     }
+
+                    val localScore = resLocal.toIntOrNull()
+                    val visitorScore = resVisitor.toIntOrNull()
 
                     val updatedMatch = match.copy(
                         resultLocal = localScore,

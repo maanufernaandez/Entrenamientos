@@ -762,8 +762,8 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                             onClick = {
                                 if (oldPass.isBlank() || newPass.isBlank() || confirmPass.isBlank()) {
                                     android.widget.Toast.makeText(context, "Rellena todos los campos", android.widget.Toast.LENGTH_SHORT).show()
-                                } else if (newPass.length !in 8..20) {
-                                    android.widget.Toast.makeText(context, "La nueva contraseña debe tener entre 8 y 20 caracteres", android.widget.Toast.LENGTH_SHORT).show()
+                                } else if (!com.example.entrenamientos.logic.PasswordValidator.isValid(newPass)) {
+                                    android.widget.Toast.makeText(context, com.example.entrenamientos.logic.PasswordValidator.RULES_MESSAGE, android.widget.Toast.LENGTH_LONG).show()
                                 } else if (newPass != confirmPass) {
                                     android.widget.Toast.makeText(context, "Las contraseñas no coinciden", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {

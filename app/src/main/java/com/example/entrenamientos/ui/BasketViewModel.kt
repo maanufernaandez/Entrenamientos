@@ -9,7 +9,10 @@ import com.example.entrenamientos.data.Player
 import com.example.entrenamientos.data.Team
 import com.example.entrenamientos.data.TrainingNote
 import com.example.entrenamientos.data.TrainingSchedule
+import com.example.entrenamientos.logic.TrainingDayCalculator
+import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,6 +31,10 @@ class BasketViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "BasketViewModel"
+
+        // Firestore admite como máximo 500 operaciones por batch.
+        // Dejamos margen por seguridad.
+        private const val BATCH_LIMIT = 400
     }
 
     // ============================================================
@@ -87,8 +94,9 @@ class BasketViewModel @Inject constructor(
     val trainingNotes: StateFlow<List<TrainingNote>> =
         _trainingNotes.asStateFlow()
 
+    // Por defecto, hoy: así el calendario abre en el mes actual.
     private val _selectedDate =
-        MutableStateFlow("2026-09-01")
+        MutableStateFlow(java.time.LocalDate.now().toString())
     val selectedDate: StateFlow<String> =
         _selectedDate.asStateFlow()
 
@@ -126,12 +134,9 @@ class BasketViewModel @Inject constructor(
         }
 
     init {
-        // ACTIVAR LA PERSISTENCIA OFFLINE DE FIRESTORE
-        val settings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
-            .setPersistenceEnabled(true)
-            .build()
-        db.firestoreSettings = settings
-
+        // La persistencia offline de Firestore ya viene activada por defecto en
+        // Android, así que no hace falta tocar firestoreSettings (además, cambiarlos
+        // después de haber usado Firestore lanza IllegalStateException).
         auth.addAuthStateListener(authStateListener)
     }
 
@@ -511,19 +516,15 @@ class BasketViewModel @Inject constructor(
                 it.year == teamId
             }
 
-        val firstTrainingDate =
-            existingTeam?.firstTrainingDate
-                ?: "2026-09-01"
-
+        // Partimos del equipo existente para no perder los campos que este
+        // método no edita (firstTrainingDate y lastTrainingDate).
         val updatedTeam =
-            Team(
-                year = teamId,
+            (existingTeam ?: Team(year = teamId)).copy(
                 name = newName,
                 shortName = shortName,
                 gender = gender,
                 categoryYear = newCategoryYear,
                 colorHex = newColorHex,
-                firstTrainingDate = firstTrainingDate,
                 trackMatches = trackMatches
             )
 
@@ -540,6 +541,34 @@ class BasketViewModel @Inject constructor(
             }
     }
 
+    /**
+     * Borra los documentos indicados en batches de [BATCH_LIMIT] operaciones
+     * (Firestore rechaza batches de más de 500). Llama a [onSuccess] solo si
+     * TODOS los batches se confirman; si alguno falla llama a [onFailure].
+     */
+    private fun deleteDocumentsInChunks(
+        refs: List<DocumentReference>,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        if (refs.isEmpty()) {
+            onSuccess()
+            return
+        }
+
+        val commits = refs
+            .chunked(BATCH_LIMIT)
+            .map { chunk ->
+                val batch = db.batch()
+                chunk.forEach { ref -> batch.delete(ref) }
+                batch.commit()
+            }
+
+        Tasks.whenAll(commits)
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { error -> onFailure(error) }
+    }
+
     fun deleteTeamCascade(
         team: Team
     ) {
@@ -550,125 +579,79 @@ class BasketViewModel @Inject constructor(
         val teamYear =
             team.year
 
-        val batch =
-            db.batch()
+        val refs =
+            mutableListOf<DocumentReference>()
 
-        batch.delete(
-            user.collection("teams")
-                .document(teamYear.toString())
-        )
+        refs += user.collection("teams")
+            .document(teamYear.toString())
 
         _players.value
-            .filter {
-                it.teamYear == teamYear
-            }
+            .filter { it.teamYear == teamYear }
             .forEach { player ->
-
-                batch.delete(
-                    user.collection("players")
-                        .document(player.id.toString())
-                )
+                refs += user.collection("players")
+                    .document(player.id.toString())
             }
 
         _schedules.value
-            .filter {
-                it.teamYear == teamYear
-            }
+            .filter { it.teamYear == teamYear }
             .forEach { schedule ->
-
-                batch.delete(
-                    user.collection("schedules")
-                        .document(schedule.id.toString())
-                )
+                refs += user.collection("schedules")
+                    .document(schedule.id.toString())
             }
 
         _matches.value
-            .filter {
-                it.teamYear == teamYear
-            }
+            .filter { it.teamYear == teamYear }
             .forEach { match ->
-
-                batch.delete(
-                    user.collection("matches")
-                        .document(match.id.toString())
-                )
+                refs += user.collection("matches")
+                    .document(match.id.toString())
             }
 
         _attendances.value
-            .filter {
-                it.teamYear == teamYear
-            }
+            .filter { it.teamYear == teamYear }
             .forEach { attendance ->
-
-                batch.delete(
-                    user.collection("attendances")
-                        .document(
-                            "${attendance.date}_${attendance.playerId}"
-                        )
-                )
+                refs += user.collection("attendances")
+                    .document("${attendance.date}_${attendance.playerId}")
             }
 
         _trainingNotes.value
-            .filter {
-                it.teamYear == teamYear
-            }
+            .filter { it.teamYear == teamYear }
             .forEach { note ->
-
-                batch.delete(
-                    user.collection("training_notes")
-                        .document(
-                            "${note.date}_${note.teamYear}_${note.noteType}"
-                        )
-                )
+                refs += user.collection("training_notes")
+                    .document("${note.date}_${note.teamYear}_${note.noteType}")
             }
 
-        batch.commit()
-            .addOnSuccessListener {
+        deleteDocumentsInChunks(
+            refs = refs,
+            onSuccess = {
 
                 _teams.value =
-                    _teams.value.filter {
-                        it.year != teamYear
-                    }
+                    _teams.value.filter { it.year != teamYear }
 
                 _players.value =
-                    _players.value.filter {
-                        it.teamYear != teamYear
-                    }
+                    _players.value.filter { it.teamYear != teamYear }
 
                 _schedules.value =
-                    _schedules.value.filter {
-                        it.teamYear != teamYear
-                    }
+                    _schedules.value.filter { it.teamYear != teamYear }
 
                 _matches.value =
-                    _matches.value.filter {
-                        it.teamYear != teamYear
-                    }
+                    _matches.value.filter { it.teamYear != teamYear }
 
                 _attendances.value =
-                    _attendances.value.filter {
-                        it.teamYear != teamYear
-                    }
+                    _attendances.value.filter { it.teamYear != teamYear }
 
                 _trainingNotes.value =
-                    _trainingNotes.value.filter {
-                        it.teamYear != teamYear
-                    }
+                    _trainingNotes.value.filter { it.teamYear != teamYear }
 
                 _selectedTeamYear.value =
                     _teams.value
                         .firstOrNull()
                         ?.year
                         ?: 0
+            },
+            onFailure = { error ->
+                Log.e(TAG, "Error eliminando equipo", error)
             }
-            .addOnFailureListener { error ->
-
-                Log.e(
-                    TAG,
-                    "Error eliminando equipo",
-                    error
-                )
-            }
+        )
     }
 
     // ============================================================
@@ -759,24 +742,35 @@ class BasketViewModel @Inject constructor(
         val user =
             userDoc ?: return
 
-        user.collection("players")
+        val refs =
+            mutableListOf<DocumentReference>()
+
+        refs += user.collection("players")
             .document(player.id.toString())
-            .delete()
-            .addOnSuccessListener {
+
+        // Las asistencias del jugador se borran con él para no dejar
+        // documentos huérfanos en Firestore.
+        _attendances.value
+            .filter { it.playerId == player.id }
+            .forEach { attendance ->
+                refs += user.collection("attendances")
+                    .document("${attendance.date}_${attendance.playerId}")
+            }
+
+        deleteDocumentsInChunks(
+            refs = refs,
+            onSuccess = {
 
                 _players.value =
-                    _players.value.filter {
-                        it.id != player.id
-                    }
-            }
-            .addOnFailureListener { error ->
+                    _players.value.filter { it.id != player.id }
 
-                Log.e(
-                    TAG,
-                    "Error eliminando jugador",
-                    error
-                )
+                _attendances.value =
+                    _attendances.value.filter { it.playerId != player.id }
+            },
+            onFailure = { error ->
+                Log.e(TAG, "Error eliminando jugador", error)
             }
+        )
     }
 
     fun getPlayersForTeam(
@@ -938,50 +932,14 @@ class BasketViewModel @Inject constructor(
         date: java.time.LocalDate
     ): List<Int> {
 
-        if (isHoliday(date)) {
-            return emptyList()
-        }
-
-        val dayValue =
-            date.dayOfWeek.value
-
-        return _schedules.value
-            .filter { schedule ->
-
-                if (
-                    schedule.dayOfWeek != dayValue
-                ) {
-                    return@filter false
-                }
-
-                val team =
-                    _teams.value.find {
-                        it.year == schedule.teamYear
-                    }
-
-                val firstDateStr =
-                    team?.firstTrainingDate
-                        ?: "2026-09-01"
-
-                val firstDate =
-                    try {
-                        java.time.LocalDate.parse(
-                            firstDateStr
-                        )
-                    } catch (_: Exception) {
-                        java.time.LocalDate.of(
-                            2026,
-                            9,
-                            1
-                        )
-                    }
-
-                !date.isBefore(firstDate)
-            }
-            .map {
-                it.teamYear
-            }
-            .distinct()
+        return TrainingDayCalculator.teamYearsForDate(
+            date = date,
+            schedules = _schedules.value,
+            teams = _teams.value,
+            holidayDates = _holidays.value
+                .map { it.date }
+                .toSet()
+        )
     }
 
     fun updateTeamFirstTrainingDate(

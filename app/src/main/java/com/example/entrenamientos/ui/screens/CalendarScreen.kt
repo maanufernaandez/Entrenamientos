@@ -48,7 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.entrenamientos.data.Match
+import com.example.entrenamientos.data.Team
 import com.example.entrenamientos.data.TrainingSchedule
+import com.example.entrenamientos.logic.TrainingDayCalculator
 import com.example.entrenamientos.ui.BasketViewModel
 
 @Composable
@@ -58,31 +61,30 @@ fun CalendarScreen(
 ) {
     val teamsList by viewModel.teams.collectAsState()
     val schedules by viewModel.schedules.collectAsState()
+    val matches by viewModel.matches.collectAsState()
+    val holidays by viewModel.holidays.collectAsState()
 
-    val minMonth = remember(teamsList) {
-        val earliest = teamsList
-            .mapNotNull { team ->
-                team.firstTrainingDate
-                    .takeIf { it.isNotBlank() }
-                    ?.let {
-                        try {
-                            java.time.LocalDate.parse(it)
-                        } catch (_: Exception) {
-                            null
-                        }
-                    }
-            }
-            .minOrNull()
-            ?: java.time.LocalDate.of(2026, 9, 1)
+    val holidayDates = remember(holidays) { holidays.map { it.date }.toSet() }
+    val matchesByDate = remember(matches) { matches.groupBy { it.date } }
 
-        java.time.YearMonth.from(earliest)
+    // El calendario cubre desde el primer entrenamiento/partido hasta el último,
+    // según los datos reales de los equipos (ya no está fijado a una temporada).
+    val (seasonStart, seasonEnd) = remember(teamsList, matches) {
+        TrainingDayCalculator.seasonBounds(teamsList, matches)
     }
+    val minMonth = java.time.YearMonth.from(seasonStart)
+    val maxMonth = java.time.YearMonth.from(seasonEnd)
 
-    // Límite máximo fijado en Mayo de 2027
-    val maxMonth = java.time.YearMonth.of(2027, 5)
-
+    // Abre en el mes de la fecha seleccionada (hoy al arrancar; el último día
+    // tocado al volver de otra pantalla), sin salirse del rango.
     var currentMonth by remember {
-        mutableStateOf(java.time.YearMonth.of(2026, 9))
+        mutableStateOf(
+            try {
+                java.time.YearMonth.from(java.time.LocalDate.parse(viewModel.selectedDate.value))
+            } catch (_: Exception) {
+                java.time.YearMonth.now()
+            }
+        )
     }
 
     var showDayDialog by remember {
@@ -93,10 +95,8 @@ fun CalendarScreen(
         mutableStateOf<java.time.LocalDate?>(null)
     }
 
-    LaunchedEffect(minMonth) {
-        if (currentMonth.isBefore(minMonth)) {
-            currentMonth = minMonth
-        }
+    LaunchedEffect(minMonth, maxMonth) {
+        currentMonth = clampMonth(currentMonth, minMonth, maxMonth)
     }
 
     // Calculamos el mismo tamaño dinámico que usamos en Ajustes
@@ -211,8 +211,16 @@ fun CalendarScreen(
                             if (dayDate != null) {
                                 DayCell(
                                     date = dayDate,
-                                    viewModel = viewModel,
-                                    schedules = schedules,
+                                    daySchedules = TrainingDayCalculator.schedulesForDate(
+                                        date = dayDate,
+                                        schedules = schedules,
+                                        teams = teamsList,
+                                        holidayDates = holidayDates
+                                    ),
+                                    matchesForDay = matchesByDate[dayDate.toString()] ?: emptyList(),
+                                    teamsList = teamsList,
+                                    isHoliday = holidayDates.contains(dayDate.toString()),
+                                    isOutsideSeason = dayDate.isBefore(seasonStart) || dayDate.isAfter(seasonEnd),
                                     onClick = {
                                         viewModel.setSelectedDate(
                                             dayDate.toString()
@@ -250,63 +258,41 @@ fun CalendarScreen(
     }
 }
 
+private fun clampMonth(
+    month: java.time.YearMonth,
+    min: java.time.YearMonth,
+    max: java.time.YearMonth
+): java.time.YearMonth =
+    when {
+        month.isBefore(min) -> min
+        month.isAfter(max) -> max
+        else -> month
+    }
+
 @Composable
 fun DayCell(
     date: java.time.LocalDate,
-    viewModel: BasketViewModel,
-    schedules: List<TrainingSchedule>,
+    daySchedules: List<TrainingSchedule>,
+    matchesForDay: List<Match>,
+    teamsList: List<Team>,
+    isHoliday: Boolean,
+    isOutsideSeason: Boolean,
     onClick: () -> Unit
 ) {
-    val isHoliday = viewModel.isHoliday(date)
-    val dayValue = date.dayOfWeek.value
-
-    val teamsList by viewModel.teams.collectAsState()
-    val matches by viewModel.matches.collectAsState()
-
-    val earliestTrainingDate = teamsList
-        .mapNotNull { team ->
-            team.firstTrainingDate
-                .takeIf { it.isNotBlank() }
-                ?.let {
-                    try {
-                        java.time.LocalDate.parse(it)
-                    } catch (_: Exception) {
-                        null
-                    }
-                }
-        }
-        .minOrNull()
-        ?: java.time.LocalDate.of(2026, 9, 1)
-
-    val isBeforeSeason = date.isBefore(earliestTrainingDate)
     val isPastDay = date.isBefore(java.time.LocalDate.now())
 
     val cellBackgroundColor = when {
-        isBeforeSeason -> Color.LightGray.copy(alpha = 0.4f)
+        isOutsideSeason -> Color.LightGray.copy(alpha = 0.4f)
         isHoliday -> Color(0xFFFFEBEE)
         isPastDay -> Color(0xFFFFF5F5)
         else -> Color.White
     }
 
-    val daySchedules = if (isHoliday || isBeforeSeason) {
-        emptyList()
-    } else {
-        schedules.filter { schedule ->
-            if (schedule.dayOfWeek != dayValue) return@filter false
-            val team = teamsList.find { it.year == schedule.teamYear }
-            val firstDateStr = team?.firstTrainingDate ?: "2026-09-01"
-            val firstDate = try { java.time.LocalDate.parse(firstDateStr) } catch (_: Exception) { java.time.LocalDate.of(2026, 9, 1) }
-            !date.isBefore(firstDate)
-        }.sortedBy { it.startTime }
-    }
-
-    val matchesForDay = matches.filter { it.date == date.toString() }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(cellBackgroundColor)
-            .clickable(enabled = !isBeforeSeason && (daySchedules.isNotEmpty() || matchesForDay.isNotEmpty())) { onClick() }
+            .clickable(enabled = !isOutsideSeason && (daySchedules.isNotEmpty() || matchesForDay.isNotEmpty())) { onClick() }
             .padding(2.dp)
     ) {
         // Día del mes siempre en su lugar arriba
@@ -314,11 +300,11 @@ fun DayCell(
             text = date.dayOfMonth.toString(),
             style = MaterialTheme.typography.bodyLarge,
             color = when {
-                isHoliday && !isBeforeSeason -> Color.Red
-                isBeforeSeason -> Color.Gray
+                isHoliday && !isOutsideSeason -> Color.Red
+                isOutsideSeason -> Color.Gray
                 else -> Color.Unspecified
             },
-            fontWeight = if (isHoliday && !isBeforeSeason) FontWeight.ExtraBold else FontWeight.SemiBold
+            fontWeight = if (isHoliday && !isOutsideSeason) FontWeight.ExtraBold else FontWeight.SemiBold
         )
 
         // Contenedor que usa todo el espacio restante para centrar verticalmente su contenido
@@ -330,7 +316,7 @@ fun DayCell(
             verticalArrangement = Arrangement.Center
         ) {
             // Círculos de los partidos
-            if (matchesForDay.isNotEmpty() && !isBeforeSeason) {
+            if (matchesForDay.isNotEmpty() && !isOutsideSeason) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -407,10 +393,20 @@ fun DayOptionsDialog(
     navController: NavController,
     onDismiss: () -> Unit
 ) {
-    val teams = viewModel.getTeamsForDate(date)
+    val allSchedules by viewModel.schedules.collectAsState()
+    val allHolidays by viewModel.holidays.collectAsState()
     val allMatches by viewModel.matches.collectAsState()
     val dayMatches = allMatches.filter { it.date == date.toString() }
     val teamsList by viewModel.teams.collectAsState()
+
+    val teams = remember(date, allSchedules, teamsList, allHolidays) {
+        TrainingDayCalculator.teamYearsForDate(
+            date = date,
+            schedules = allSchedules,
+            teams = teamsList,
+            holidayDates = allHolidays.map { it.date }.toSet()
+        )
+    }
 
     val allAttendances by viewModel.attendances.collectAsState()
 

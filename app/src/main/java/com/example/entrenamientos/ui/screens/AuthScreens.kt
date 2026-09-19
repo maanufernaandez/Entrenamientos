@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.entrenamientos.R
+import com.example.entrenamientos.logic.PasswordValidator
 import com.example.entrenamientos.ui.AuthViewModel
 
 @Composable
@@ -130,7 +131,7 @@ fun LoginScreen(
                 Button(onClick = {
                     authViewModel.resetPassword(resetEmail.trim(),
                         onSuccess = {
-                            Toast.makeText(context, "Correo enviado", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Si el correo está registrado, recibirás un enlace para restablecer la contraseña", Toast.LENGTH_LONG).show()
                             showForgotPassDialog = false
                         },
                         onError = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
@@ -156,10 +157,11 @@ fun RegisterScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var isRegistering by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Variables reactivas para mostrar los mensajes de error en rojo
-    val isPasswordLengthError = password.isNotEmpty() && (password.length < 8 || password.length > 20)
+    val isPasswordInvalid = password.isNotEmpty() && !PasswordValidator.isValid(password)
     val isPasswordMatchError = confirmPassword.isNotEmpty() && password != confirmPassword
 
     Column(
@@ -185,13 +187,13 @@ fun RegisterScreen(
             onValueChange = { password = it },
             label = { Text("Contraseña") },
             visualTransformation = PasswordVisualTransformation(),
-            isError = isPasswordLengthError,
+            isError = isPasswordInvalid,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
-        if (isPasswordLengthError) {
+        if (isPasswordInvalid) {
             Text(
-                text = "La contraseña debe tener entre 8 y 20 caracteres",
+                text = PasswordValidator.RULES_MESSAGE,
                 color = Color.Red,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp),
@@ -226,25 +228,30 @@ fun RegisterScreen(
             onClick = {
                 if (name.isBlank() || lastName.isBlank() || club.isBlank() || email.isBlank() || password.isBlank()) {
                     Toast.makeText(context, "Rellena todos los campos", Toast.LENGTH_SHORT).show()
-                } else if (isPasswordLengthError) {
-                    Toast.makeText(context, "La contraseña debe tener entre 8 y 20 caracteres", Toast.LENGTH_SHORT).show()
+                } else if (isPasswordInvalid) {
+                    Toast.makeText(context, PasswordValidator.RULES_MESSAGE, Toast.LENGTH_LONG).show()
                 } else if (isPasswordMatchError) {
                     Toast.makeText(context, "Las contraseñas no coinciden", Toast.LENGTH_SHORT).show()
                 } else {
+                    isRegistering = true
                     authViewModel.register(email.trim(), password, name.trim(), lastName.trim(), club.trim(),
                         onSuccess = {
-                            // Se cambia el texto del aviso y se quita lo del correo de verificación
+                            isRegistering = false
                             Toast.makeText(context, "Cuenta creada correctamente", Toast.LENGTH_SHORT).show()
                             onRegisterSuccess()
                         },
-                        onError = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+                        onError = {
+                            isRegistering = false
+                            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                        }
                     )
                 }
             },
+            enabled = !isRegistering,
             modifier = Modifier.fillMaxWidth().height(50.dp),
             colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
         ) {
-            Text("Registrarse", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(if (isRegistering) "Registrando..." else "Registrarse", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
