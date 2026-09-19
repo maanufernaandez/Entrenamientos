@@ -13,3 +13,24 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firmas y binarios de release: nunca deben subirse al repositorio
+*.jks
+*.keystore
+*.apk
+*.aab
+/app/release
+/app/debug
+
+# Kotlin / Gradle
+.kotlin/
+
+# Firebase CLI (local)
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Variables de entorno y logs
+.env
+*.log

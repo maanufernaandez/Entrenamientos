@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.entrenamientos.data.Player
+import com.example.entrenamientos.logic.CategoryRules
+import com.example.entrenamientos.logic.RosterCheck
 import com.example.entrenamientos.ui.BasketViewModel
 import com.example.entrenamientos.ui.theme.AttendanceGreen
 import com.example.entrenamientos.ui.theme.AttendanceRed
@@ -78,19 +80,10 @@ fun ConvocatoriaScreen(
     val isFemale = matchTeam?.gender == "F"
     val category = matchTeam?.categoryYear ?: ""
 
-    val isSeniorCategory = category.startsWith("Cadete") || category.startsWith("Junior") || category.startsWith("Senior")
-    val isInfantil = category.startsWith("Infantil") || category.startsWith("Preinfantil")
-    val isMini = category.startsWith("Minibasket") || category.startsWith("PreMinibasket") || category.startsWith("Benjamin 5x5")
-    val is3x3 = category.startsWith("Benjamin 3x3") || category.startsWith("Pre-Benjamin 3x3")
-
-    val minPlayers = when {
-        is3x3 -> 4
-        isSeniorCategory -> 5
-        else -> 8
-    }
-
-    val absoluteMinPlayers = if (isInfantil) 5 else minPlayers
-    val maxPlayers = if (isMini) 15 else 12
+    val rules = CategoryRules.fromCategory(category)
+    val minPlayers = rules.minPlayers
+    val absoluteMinPlayers = rules.absoluteMinPlayers
+    val maxPlayers = rules.maxPlayers
 
     val txtConvocadas = if (isFemale) "CONVOCADAS" else "CONVOCADOS"
     val txtDesconvocadas = if (isFemale) "DESCONVOCADAS" else "DESCONVOCADOS"
@@ -240,7 +233,7 @@ fun ConvocatoriaScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         if (!isEditMode) {
-            if (isInfantil && match.summonedPlayers.size in 5..7) {
+            if (rules.checkRosterSize(match.summonedPlayers.size) == RosterCheck.NEEDS_CONFIRMATION) {
                 Text(
                     text = "¡AVISO! No dispones del número mínimo de $txtJugadoras para cumplir con la normativa.",
                     color = AttendanceRed,
@@ -390,12 +383,11 @@ fun ConvocatoriaScreen(
                 Button(
                     onClick = {
                         if (isSaving) return@Button
-                        when {
-                            summonedIds.size > maxPlayers -> Toast.makeText(context, "Máximo $maxPlayers $txtJugadoras en esta categoría", Toast.LENGTH_LONG).show()
-                            summonedIds.size < absoluteMinPlayers -> Toast.makeText(context, "Debes convocar mínimo $absoluteMinPlayers $txtJugadoras", Toast.LENGTH_LONG).show()
-                            isInfantil && summonedIds.size in 5..7 -> showMinPlayersWarning = true
-                            summonedIds.size < minPlayers -> Toast.makeText(context, "Debes convocar mínimo $minPlayers $txtJugadoras", Toast.LENGTH_LONG).show()
-                            else -> saveConvocatoria()
+                        when (rules.checkRosterSize(summonedIds.size)) {
+                            RosterCheck.TOO_MANY -> Toast.makeText(context, "Máximo $maxPlayers $txtJugadoras en esta categoría", Toast.LENGTH_LONG).show()
+                            RosterCheck.BELOW_MINIMUM -> Toast.makeText(context, "Debes convocar mínimo $absoluteMinPlayers $txtJugadoras", Toast.LENGTH_LONG).show()
+                            RosterCheck.NEEDS_CONFIRMATION -> showMinPlayersWarning = true
+                            RosterCheck.OK -> saveConvocatoria()
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -410,7 +402,7 @@ fun ConvocatoriaScreen(
         AlertDialog(
             onDismissRequest = { if (!isSaving) showMinPlayersWarning = false },
             title = { Text("Aviso de Normativa", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold) },
-            text = { Text("No tienes el número mínimo de $txtJugadoras para cumplir con la normativa (Mínimo 8). ¿Deseas guardar la convocatoria de todos modos?", textAlign = TextAlign.Justify) },
+            text = { Text("No tienes el número mínimo de $txtJugadoras para cumplir con la normativa (Mínimo ${rules.minPlayers}). ¿Deseas guardar la convocatoria de todos modos?", textAlign = TextAlign.Justify) },
             confirmButton = {},
             dismissButton = {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

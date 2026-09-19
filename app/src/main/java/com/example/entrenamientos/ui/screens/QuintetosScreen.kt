@@ -49,6 +49,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.entrenamientos.logic.CategoryRules
+import com.example.entrenamientos.logic.LineupRules
 import com.example.entrenamientos.ui.BasketViewModel
 
 @Composable
@@ -122,35 +124,12 @@ fun QuintetosScreen(
     val isFemale = matchTeam?.gender == "F"
     val category = matchTeam?.categoryYear ?: ""
 
-    val isSeniorCategory =
-        category.startsWith("Cadete") ||
-                category.startsWith("Junior") ||
-                category.startsWith("Senior")
-
-    val isInfantil =
-        category.startsWith("Infantil") ||
-                category.startsWith("Preinfantil")
-
-    val isMini =
-        category.startsWith("Minibasket") ||
-                category.startsWith("PreMinibasket") ||
-                category.startsWith("Benjamin 5x5")
-
-    val is3x3 =
-        category.startsWith("Benjamin 3x3") ||
-                category.startsWith("Pre-Benjamin 3x3")
-
-    val totalQuarters =
-        when {
-            isSeniorCategory -> 1
-            isInfantil -> 4
-            isMini -> 6
-            is3x3 -> 8
-            else -> 4
-        }
-
-    val playersPerQuarter =
-        if (is3x3) 3 else 5
+    val rules = CategoryRules.fromCategory(category)
+    val isSeniorCategory = rules.isSenior
+    val isMini = rules.isMini
+    val is3x3 = rules.is3x3
+    val totalQuarters = rules.totalQuarters
+    val playersPerQuarter = rules.playersPerQuarter
 
     val txtSeleccionadas =
         if (isFemale) "Seleccionadas" else "Seleccionados"
@@ -274,67 +253,21 @@ fun QuintetosScreen(
             }
             .sortedWith(playerSortComparator)
 
-    val applyInfantilRules =
-        isInfantil &&
-                summonedPlayers.size >= 8
+    val summonedPlayerIds = summonedPlayers.map { it.id }
 
     val forcedPlayers =
         remember(
             currentQuarter,
             lineups,
             summonedPlayers,
-            applyInfantilRules,
-            isMini
+            rules
         ) {
-
-            if (
-                applyInfantilRules &&
-                currentQuarter == 3 &&
-                lineups.size == 2
-            ) {
-
-                summonedPlayers
-                    .filter { player ->
-                        !lineups[0].contains(player.id) &&
-                                !lineups[1].contains(player.id)
-                    }
-                    .map {
-                        it.id
-                    }
-                    .toSet()
-
-            } else if (isMini) {
-
-                val forced =
-                    mutableSetOf<Long>()
-
-                summonedPlayers.forEach { player ->
-
-                    val qPlayed =
-                        lineups.count {
-                            it.contains(player.id)
-                        }
-
-                    if (
-                        currentQuarter == 5 &&
-                        qPlayed == 0
-                    ) {
-                        forced.add(player.id)
-                    }
-
-                    if (
-                        currentQuarter == 6 &&
-                        qPlayed < 2
-                    ) {
-                        forced.add(player.id)
-                    }
-                }
-
-                forced
-
-            } else {
-                emptySet()
-            }
+            LineupRules.forcedPlayers(
+                rules = rules,
+                summonedIds = summonedPlayerIds,
+                lineups = lineups,
+                currentQuarter = currentQuarter
+            )
         }
 
     var currentSelection by remember(
@@ -1392,144 +1325,14 @@ fun QuintetosScreen(
                             }
 
                         val isBanned =
-                            when {
-
-                                is3x3 ->
-                                    false
-
-                                isMini -> {
-
-                                    val qFirst5 =
-                                        if (
-                                            currentQuarter <= 5
-                                        ) {
-                                            quartersPlayedTotal
-                                        } else {
-                                            lineups
-                                                .take(5)
-                                                .count {
-                                                    it.contains(
-                                                        player.id
-                                                    )
-                                                }
-                                        }
-
-                                    if (
-                                        currentQuarter <= 5
-                                    ) {
-
-                                        if (
-                                            summonedPlayers.size == 8
-                                        ) {
-
-                                            if (
-                                                quartersPlayedTotal >= 4
-                                            ) {
-                                                true
-
-                                            } else if (
-                                                quartersPlayedTotal == 3
-                                            ) {
-
-                                                summonedPlayers.any { other ->
-
-                                                    other.id !=
-                                                            player.id &&
-                                                            (
-                                                                    lineups
-                                                                        .count {
-                                                                            it.contains(
-                                                                                other.id
-                                                                            )
-                                                                        } +
-                                                                            if (
-                                                                                currentSelection.contains(
-                                                                                    other.id
-                                                                                )
-                                                                            ) {
-                                                                                1
-                                                                            } else {
-                                                                                0
-                                                                            }
-                                                                            >= 4
-                                                                    )
-                                                }
-
-                                            } else {
-                                                false
-                                            }
-
-                                        } else {
-                                            quartersPlayedTotal >= 3
-                                        }
-
-                                    } else if (
-                                        currentQuarter == 6
-                                    ) {
-
-                                        if (
-                                            summonedPlayers.size == 8
-                                        ) {
-                                            qFirst5 >= 4
-
-                                        } else if (
-                                            summonedPlayers.size in 13..15
-                                        ) {
-
-                                            if (
-                                                quartersPlayedTotal >= 3
-                                            ) {
-
-                                                summonedPlayers.any { other ->
-
-                                                    other.id !=
-                                                            player.id &&
-                                                            (
-                                                                    lineups.count {
-                                                                        it.contains(
-                                                                            other.id
-                                                                        )
-                                                                    } +
-                                                                            if (
-                                                                                currentSelection.contains(
-                                                                                    other.id
-                                                                                )
-                                                                            ) {
-                                                                                1
-                                                                            } else {
-                                                                                0
-                                                                            }
-                                                                    ) < 3
-                                                }
-
-                                            } else {
-                                                false
-                                            }
-
-                                        } else {
-                                            false
-                                        }
-
-                                    } else {
-                                        false
-                                    }
-                                }
-
-                                isInfantil &&
-                                        applyInfantilRules ->
-
-                                    currentQuarter == 3 &&
-                                            lineups.size >= 2 &&
-                                            lineups[0].contains(
-                                                player.id
-                                            ) &&
-                                            lineups[1].contains(
-                                                player.id
-                                            )
-
-                                else ->
-                                    false
-                            }
+                            LineupRules.isBanned(
+                                rules = rules,
+                                playerId = player.id,
+                                summonedIds = summonedPlayerIds,
+                                lineups = lineups,
+                                currentQuarter = currentQuarter,
+                                currentSelection = currentSelection
+                            )
 
                         val containerColor =
                             when {

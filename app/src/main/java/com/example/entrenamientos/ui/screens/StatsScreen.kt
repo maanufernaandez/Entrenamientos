@@ -17,7 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.entrenamientos.data.Player
+import com.example.entrenamientos.logic.AttendanceWeekCalculator
+import com.example.entrenamientos.logic.StatsCalculator
+import com.example.entrenamientos.logic.TrainingDayCalculator
 import com.example.entrenamientos.ui.BasketViewModel
 
 @Composable
@@ -38,10 +40,37 @@ fun StatsScreen(viewModel: BasketViewModel) {
 
     val attendances by viewModel.getAllAttendancesByTeam(selectedTeam).collectAsState(initial = emptyList())
     val allMatches by viewModel.matches.collectAsState()
-    val teamMatches = allMatches.filter { it.teamYear == selectedTeam }
+    val teamMatches = remember(allMatches, selectedTeam) { allMatches.filter { it.teamYear == selectedTeam } }
     val players by viewModel.getPlayersForTeam(selectedTeam).collectAsState(initial = emptyList())
     val schedules by viewModel.schedules.collectAsState()
     val holidays by viewModel.holidays.collectAsState()
+
+    // Cálculos de estadísticas: fuera del LazyColumn y memorizados, para no
+    // rehacerlos cada vez que se despliega o se pliega una sección.
+    val today = java.time.LocalDate.now()
+
+    val seasonAttendanceCounts = remember(players, attendances) {
+        StatsCalculator.attendanceCounts(players, attendances)
+    }
+
+    val monthsWithWeeks = remember(activeTeamObj, attendances, schedules, holidays, selectedTeam, today) {
+        val validWeeks = AttendanceWeekCalculator.calculateValidWeeks(
+            attendanceDates = attendances.map { it.date },
+            scheduleDaysOfWeek = schedules.filter { it.teamYear == selectedTeam }.map { it.dayOfWeek },
+            holidayDates = holidays.map { it.date }.toSet(),
+            firstTrainingDate = activeTeamObj?.let { TrainingDayCalculator.firstDateOf(it) }
+                ?: TrainingDayCalculator.DEFAULT_FIRST_DATE,
+            lastTrainingDate = activeTeamObj?.let { TrainingDayCalculator.lastDateOf(it) }
+                ?: TrainingDayCalculator.DEFAULT_LAST_DATE,
+            today = today
+        )
+
+        StatsCalculator.weeksByMonth(validWeeks, attendances)
+    }
+
+    val matchSeasonStats = remember(teamMatches) { StatsCalculator.matchSeasonStats(teamMatches) }
+    val unsummonedStats = remember(teamMatches) { StatsCalculator.unsummonedReasonCounts(teamMatches) }
+    val monthsWithMatches = remember(teamMatches) { StatsCalculator.matchesByMonth(teamMatches) }
 
     val expandedAttendanceMonths = remember { mutableStateMapOf<java.time.YearMonth, Boolean>() }
     val expandedMatchMonths = remember { mutableStateMapOf<java.time.YearMonth, Boolean>() }
@@ -50,13 +79,6 @@ fun StatsScreen(viewModel: BasketViewModel) {
     var isSeasonStatsExpanded by remember { mutableStateOf(false) }
     var isSeasonMatchesExpanded by remember { mutableStateOf(false) }
     val expandedWeekDetails = remember { mutableStateMapOf<java.time.LocalDate, Boolean>() }
-
-    data class PlayerAttendanceCount(
-        val player: Player,
-        val present: Int,
-        val justified: Int,
-        val unjustified: Int
-    )
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("PANEL DE ESTADÍSTICAS", style = MaterialTheme.typography.headlineMedium)
@@ -116,15 +138,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 }
 
                 if (isSeasonAttendanceExpanded) {
-                    val sortedPlayersByAttendance = players.map { player ->
-                        val pAtts = attendances.filter { it.playerId == player.id }
-                        PlayerAttendanceCount(
-                            player = player,
-                            present = pAtts.count { it.status == 0 },
-                            justified = pAtts.count { it.status == 1 },
-                            unjustified = pAtts.count { it.status == 2 }
-                        )
-                    }.sortedByDescending { it.present }
+                    val sortedPlayersByAttendance = seasonAttendanceCounts
 
                     item {
                         Card(
@@ -179,46 +193,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 }
             }
 
-            // =================================================================================
-            // MOTOR DE GENERACIÓN DE SEMANAS (extraído a AttendanceWeekCalculator, con tests)
-            // =================================================================================
-            val firstTrainingStr = activeTeamObj?.firstTrainingDate?.takeIf { it.isNotBlank() } ?: "2026-09-01"
-            val firstTrainingDate = try { java.time.LocalDate.parse(firstTrainingStr) } catch (_: Exception) { java.time.LocalDate.of(2026, 9, 1) }
-
-            val lastTrainingStr = activeTeamObj?.lastTrainingDate?.takeIf { it.isNotBlank() } ?: "2027-05-31"
-            val lastTrainingDate = try { java.time.LocalDate.parse(lastTrainingStr) } catch (_: Exception) { java.time.LocalDate.of(2027, 5, 31) }
-
-            val teamSchedules = schedules.filter { it.teamYear == selectedTeam }
-
-            val validWeeks = com.example.entrenamientos.logic.AttendanceWeekCalculator.calculateValidWeeks(
-                attendanceDates = attendances.map { it.date },
-                scheduleDaysOfWeek = teamSchedules.map { it.dayOfWeek },
-                holidayDates = holidays.map { it.date }.toSet(),
-                firstTrainingDate = firstTrainingDate,
-                lastTrainingDate = lastTrainingDate,
-                today = java.time.LocalDate.now()
-            )
-
-            // Agrupamos las asistencias que SÍ existen en la base de datos
-            val attendancesByWeek = attendances.groupBy {
-                java.time.LocalDate.parse(it.date).with(java.time.DayOfWeek.MONDAY)
-            }
-
-            val monthToWeeksMap = mutableMapOf<java.time.YearMonth, MutableList<Pair<java.time.LocalDate, List<com.example.entrenamientos.data.Attendance>>>>()
-
-            validWeeks.forEach { weekStart ->
-                val weekAtts = attendancesByWeek[weekStart] ?: emptyList()
-                val targetMonth = (0..6)
-                    .map { offset -> java.time.YearMonth.from(weekStart.plusDays(offset.toLong())) }
-                    .groupingBy { it }
-                    .eachCount()
-                    .maxByOrNull { it.value }!!
-                    .key
-                monthToWeeksMap.getOrPut(targetMonth) { mutableListOf() }.add(weekStart to weekAtts)
-            }
-            // =================================================================================
-
-            val sortedMonths = monthToWeeksMap.toSortedMap(compareByDescending { it })
+            val sortedMonths = monthsWithWeeks
             val formatterMonth = java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale("es", "ES"))
 
             if (sortedMonths.isEmpty()) {
@@ -257,7 +232,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 }
 
                 if (isExpanded) {
-                    val sortedWeeks = weeks.sortedByDescending { it.first }
+                    val sortedWeeks = weeks
                     sortedWeeks.forEach { (weekStart, weekAttendances) ->
                         val weekEnd = weekStart.plusDays(4) // Viernes
                         val isWeekExpanded = expandedWeekDetails[weekStart] ?: false
@@ -286,15 +261,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                         }
 
                         if (isWeekExpanded) {
-                            val sortedPlayersByWeekAttendance = players.map { player ->
-                                val pAtts = weekAttendances.filter { it.playerId == player.id }
-                                PlayerAttendanceCount(
-                                    player = player,
-                                    present = pAtts.count { it.status == 0 },
-                                    justified = pAtts.count { it.status == 1 },
-                                    unjustified = pAtts.count { it.status == 2 }
-                                )
-                            }.sortedByDescending { it.present }
+                            val sortedPlayersByWeekAttendance = StatsCalculator.attendanceCounts(players, weekAttendances)
 
                             item {
                                 Card(
@@ -383,54 +350,23 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 }
 
                 if (isSeasonStatsExpanded) {
-                    val playedMatches = teamMatches.filter { it.resultLocal != null && it.resultVisitor != null }
+                    val seasonStats = matchSeasonStats
 
-                    if (playedMatches.isEmpty()) {
+                    if (seasonStats == null) {
                         item { Text("No existen datos de ningún partido", color = Color.Gray, modifier = Modifier.padding(horizontal = 8.dp)) }
                     } else {
-                        var totalWins = 0
-                        var totalLosses = 0
-                        var localWins = 0
-                        var localLosses = 0
-                        var visitorWins = 0
-                        var visitorLosses = 0
-                        var totalScored = 0
-                        var totalReceived = 0
-                        var totalFtMade = 0
-                        var totalFtAttempted = 0
+                        val totalWins = seasonStats.wins
+                        val totalLosses = seasonStats.losses
+                        val localWins = seasonStats.localWins
+                        val localLosses = seasonStats.localLosses
+                        val visitorWins = seasonStats.visitorWins
+                        val visitorLosses = seasonStats.visitorLosses
+                        val totalFtMade = seasonStats.ftMade
+                        val totalFtAttempted = seasonStats.ftAttempted
 
-                        playedMatches.forEach { m ->
-                            val localScore = m.resultLocal ?: 0
-                            val visitorScore = m.resultVisitor ?: 0
-
-                            if (m.isLocal) {
-                                totalScored += localScore
-                                totalReceived += visitorScore
-                                if (localScore > visitorScore) {
-                                    totalWins++; localWins++
-                                } else if (localScore < visitorScore) {
-                                    totalLosses++; localLosses++
-                                }
-                            } else {
-                                totalScored += visitorScore
-                                totalReceived += localScore
-                                if (visitorScore > localScore) {
-                                    totalWins++; visitorWins++
-                                } else if (visitorScore < localScore) {
-                                    totalLosses++; visitorLosses++
-                                }
-                            }
-                            totalFtMade += m.ftMade
-                            totalFtAttempted += m.ftAttempted
-                        }
-
-                        val avgScored = if (playedMatches.isNotEmpty()) totalScored.toFloat() / playedMatches.size else 0f
-                        val avgReceived = if (playedMatches.isNotEmpty()) totalReceived.toFloat() / playedMatches.size else 0f
-                        val ftPercentage = if (totalFtAttempted > 0) (totalFtMade.toFloat() / totalFtAttempted) * 100 else 0f
-
-                        val fmtScored = String.format(java.util.Locale.US, "%.1f", avgScored).removeSuffix(".0")
-                        val fmtReceived = String.format(java.util.Locale.US, "%.1f", avgReceived).removeSuffix(".0")
-                        val fmtFt = String.format(java.util.Locale.US, "%.1f", ftPercentage).removeSuffix(".0")
+                        val fmtScored = StatsCalculator.formatStat(seasonStats.avgPointsFor)
+                        val fmtReceived = StatsCalculator.formatStat(seasonStats.avgPointsAgainst)
+                        val fmtFt = StatsCalculator.formatStat(seasonStats.ftPercentage)
 
                         item {
                             val activeColor = activeTeamObj?.colorHex?.let {
@@ -482,8 +418,6 @@ fun StatsScreen(viewModel: BasketViewModel) {
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                val matchesWithConvocatoria = teamMatches.filter { it.isConvocatoriaSaved }
-
                 item {
                     val activeColor = activeTeamObj?.colorHex?.let {
                         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
@@ -500,18 +434,6 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 }
 
                 if (isSeasonMatchesExpanded) {
-                    val unsummonedStats: Map<Long, Map<String, Int>> = run {
-                        val stats = mutableMapOf<Long, MutableMap<String, Int>>()
-                        matchesWithConvocatoria.forEach { match ->
-                            match.unsummonedReasons.forEach { (playerIdStr, reason) ->
-                                val playerId = playerIdStr.toLongOrNull() ?: 0L
-                                val playerStats = stats.getOrPut(playerId) { mutableMapOf() }
-                                playerStats[reason] = playerStats.getOrDefault(reason, 0) + 1
-                            }
-                        }
-                        stats
-                    }
-
                     val sortedPlayersByUnsummoned = players.map { player -> player to (unsummonedStats[player.id]?.values?.sum() ?: 0) }.sortedByDescending { it.second }
 
                     item {
@@ -540,10 +462,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                 if (teamMatches.isEmpty()) {
                     item { Text("No hay partidos programados.", color = Color.Gray) }
                 } else {
-                    val matchesByMonth = teamMatches.groupBy { java.time.YearMonth.from(java.time.LocalDate.parse(it.date)) }
-                    val sortedMatchMonths = matchesByMonth.toSortedMap(compareByDescending { it })
-
-                    sortedMatchMonths.forEach { (month, matchesInMonth) ->
+                    monthsWithMatches.forEach { (month, matchesInMonth) ->
                         val isExpanded = expandedMatchMonths[month] ?: false
 
                         item {
@@ -559,7 +478,7 @@ fun StatsScreen(viewModel: BasketViewModel) {
                         }
 
                         if (isExpanded) {
-                            val sortedMatches = matchesInMonth.sortedByDescending { it.date }
+                            val sortedMatches = matchesInMonth
 
                             items(sortedMatches) { match ->
                                 val matchDateObj = java.time.LocalDate.parse(match.date)

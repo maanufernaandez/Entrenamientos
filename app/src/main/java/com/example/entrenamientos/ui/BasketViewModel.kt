@@ -766,11 +766,57 @@ class BasketViewModel @Inject constructor(
 
                 _attendances.value =
                     _attendances.value.filter { it.playerId != player.id }
+
+                removePlayerFromMatches(player)
             },
             onFailure = { error ->
                 Log.e(TAG, "Error eliminando jugador", error)
             }
         )
+    }
+
+    /**
+     * Quita al jugador borrado de las convocatorias (convocados y desconvocados)
+     * de los partidos de su equipo, para que no cuente como "jugador fantasma".
+     */
+    private fun removePlayerFromMatches(
+        player: Player
+    ) {
+
+        val user =
+            userDoc ?: return
+
+        val reasonKey =
+            player.id.toString()
+
+        _matches.value
+            .filter { match ->
+                match.teamYear == player.teamYear &&
+                        (
+                                match.summonedPlayers.contains(player.id) ||
+                                        match.unsummonedReasons.containsKey(reasonKey)
+                                )
+            }
+            .forEach { match ->
+
+                val cleaned =
+                    match.copy(
+                        summonedPlayers = match.summonedPlayers - player.id,
+                        unsummonedReasons = match.unsummonedReasons - reasonKey
+                    )
+
+                _matches.value =
+                    _matches.value.map {
+                        if (it.id == cleaned.id) cleaned else it
+                    }
+
+                user.collection("matches")
+                    .document(cleaned.id.toString())
+                    .set(cleaned)
+                    .addOnFailureListener { error ->
+                        Log.e(TAG, "Error limpiando la convocatoria", error)
+                    }
+            }
     }
 
     fun getPlayersForTeam(

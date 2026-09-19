@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// Reglas de seguridad de Firestore para Entrenamientos.
+//
+// Modelo de acceso: cada entrenador solo puede leer y escribir SUS datos.
+// Todo cuelga de users/{uid} y de las subcolecciones que usa la app.
+// Cualquier otra ruta queda denegada.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isShortString(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+
+    // Perfil del entrenador: si los campos existen, deben ser texto corto.
+    function isValidProfile() {
+      let data = request.resource.data;
+      return (!('name' in data) || isShortString(data.name, 100))
+        && (!('lastName' in data) || isShortString(data.lastName, 100))
+        && (!('club' in data) || isShortString(data.club, 100))
+        && (!('email' in data) || isShortString(data.email, 254));
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidProfile();
+      allow delete: if isOwner(userId);
+
+      // Datos del entrenador: solo las subcolecciones que existen en la app.
+      match /{collectionName}/{documentId} {
+        allow read, write: if isOwner(userId)
+          && collectionName in [
+            'teams',
+            'players',
+            'schedules',
+            'matches',
+            'attendances',
+            'training_notes',
+            'holidays'
+          ];
+      }
+    }
+
+    // Todo lo demás, denegado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
