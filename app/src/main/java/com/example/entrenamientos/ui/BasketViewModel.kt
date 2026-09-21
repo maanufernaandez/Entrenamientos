@@ -9,6 +9,9 @@ import com.example.entrenamientos.data.Player
 import com.example.entrenamientos.data.Team
 import com.example.entrenamientos.data.TrainingNote
 import com.example.entrenamientos.data.TrainingSchedule
+import com.example.entrenamientos.logic.ConvocatoriaRules
+import com.example.entrenamientos.logic.DefaultHolidays
+import com.example.entrenamientos.logic.ScheduleRules
 import com.example.entrenamientos.logic.TrainingDayCalculator
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
@@ -350,48 +353,7 @@ class BasketViewModel @Inject constructor(
                 .document(uid)
 
         val defaultHolidays =
-            listOf(
-                Holiday("2026-10-12"),
-                Holiday("2026-10-21"),
-                Holiday("2026-10-30"),
-                Holiday("2026-11-02"),
-                Holiday("2026-11-30"),
-                Holiday("2026-12-03"),
-                Holiday("2026-12-04"),
-                Holiday("2026-12-07"),
-                Holiday("2026-12-08"),
-                Holiday("2026-12-22"),
-                Holiday("2026-12-23"),
-                Holiday("2026-12-24"),
-                Holiday("2026-12-25"),
-                Holiday("2026-12-26"),
-                Holiday("2026-12-27"),
-                Holiday("2026-12-28"),
-                Holiday("2026-12-29"),
-                Holiday("2026-12-30"),
-                Holiday("2026-12-31"),
-                Holiday("2027-01-01"),
-                Holiday("2027-01-02"),
-                Holiday("2027-01-03"),
-                Holiday("2027-01-04"),
-                Holiday("2027-01-05"),
-                Holiday("2027-01-06"),
-                Holiday("2027-01-07"),
-                Holiday("2027-01-08"),
-                Holiday("2027-02-08"),
-                Holiday("2027-02-09"),
-                Holiday("2027-03-19"),
-                Holiday("2027-03-25"),
-                Holiday("2027-03-26"),
-                Holiday("2027-03-27"),
-                Holiday("2027-03-28"),
-                Holiday("2027-03-29"),
-                Holiday("2027-03-30"),
-                Holiday("2027-03-31"),
-                Holiday("2027-04-01"),
-                Holiday("2027-04-02"),
-                Holiday("2027-04-30")
-            )
+            DefaultHolidays.holidays()
 
         val batch =
             db.batch()
@@ -1071,38 +1033,11 @@ class BasketViewModel @Inject constructor(
             return
         }
 
-        // 1. Validar que la hora de inicio sea anterior a la de fin
-        val newStart = parseTime(newSchedule.startTime)
-        val newEnd = parseTime(newSchedule.endTime)
-        if (newStart >= newEnd) {
-            onError("La hora de inicio debe ser anterior a la de fin.")
-            return
-        }
+        // Validaciones (hora de inicio/fin, solape con el mismo equipo y máximo por día)
+        val validationError = ScheduleRules.validate(newSchedule, _schedules.value)
 
-        // 2. Validar que no se solape con otro entrenamiento del MISMO equipo
-        val teamDaySchedules = _schedules.value.filter {
-            it.teamYear == newSchedule.teamYear &&
-                    it.dayOfWeek == newSchedule.dayOfWeek &&
-                    it.id != newSchedule.id
-        }
-
-        for (schedule in teamDaySchedules) {
-            val existStart = parseTime(schedule.startTime)
-            val existEnd = parseTime(schedule.endTime)
-
-            if (maxOf(newStart, existStart) < minOf(newEnd, existEnd)) {
-                onError("El horario se solapa con otro entrenamiento de este equipo (${schedule.startTime}-${schedule.endTime}).")
-                return
-            }
-        }
-
-        // 3. NUEVO: Limitar a un máximo de 3 entrenamientos (de cualquier equipo) por día
-        val allSchedulesOnDay = _schedules.value.filter {
-            it.dayOfWeek == newSchedule.dayOfWeek && it.id != newSchedule.id
-        }
-
-        if (allSchedulesOnDay.size >= 3) {
-            onError("No puede haber más de 3 entrenamientos programados el mismo día.")
+        if (validationError != null) {
+            onError(validationError)
             return
         }
 
@@ -1123,26 +1058,6 @@ class BasketViewModel @Inject constructor(
             .addOnFailureListener { error ->
                 onError(error.message ?: "No se pudo guardar el horario.")
             }
-    }
-
-    private fun parseTime(
-        time: String
-    ): Int {
-
-        val parts =
-            time.split(":")
-
-        if (parts.size != 2) {
-            return 0
-        }
-
-        return parts[0]
-            .toIntOrNull()
-            ?.times(60)
-            ?.plus(
-                parts[1].toIntOrNull() ?: 0
-            )
-            ?: 0
     }
 
     // ============================================================
@@ -1477,55 +1392,23 @@ class BasketViewModel @Inject constructor(
         attendances: List<Attendance>
     ): Pair<Boolean, String?> {
 
-        val seasonStartYear =
-            if (matchDate.monthValue >= 9) {
-                matchDate.year
-            } else {
-                matchDate.year - 1
-            }
+        val missingDate =
+            ConvocatoriaRules.firstMissingAttendance(
+                matchDate = matchDate,
+                teamYear = teamYear,
+                attendedDates = attendances.map { it.date }.toSet(),
+                schedules = _schedules.value,
+                teams = _teams.value,
+                holidayDates = _holidays.value.map { it.date }.toSet()
+            ) ?: return Pair(true, null)
 
-        val seasonStart =
-            java.time.LocalDate.of(
-                seasonStartYear,
-                9,
-                1
-            )
+        val formatter =
+            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")
 
-        var currDate =
-            seasonStart
-
-        while (currDate.isBefore(matchDate)) {
-
-            if (
-                getTeamsForDate(currDate)
-                    .contains(teamYear)
-            ) {
-
-                val hasAttendance =
-                    attendances.any {
-                        it.date ==
-                                currDate.toString()
-                    }
-
-                if (!hasAttendance) {
-
-                    val formatter =
-                        java.time.format.DateTimeFormatter.ofPattern(
-                            "dd/MM/yyyy"
-                        )
-
-                    return Pair(
-                        false,
-                        "Falta asistencia del ${currDate.format(formatter)}"
-                    )
-                }
-            }
-
-            currDate =
-                currDate.plusDays(1)
-        }
-
-        return Pair(true, null)
+        return Pair(
+            false,
+            "Falta asistencia del ${missingDate.format(formatter)}"
+        )
     }
 
     // ============================================================
