@@ -49,35 +49,34 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity)
 
-    // Jetpack Compose UI & Material 3
+    // Jetpack Compose: las versiones las fija el BOM (ver libs.versions.toml)
+    implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
+    implementation(libs.androidx.foundation)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
 
     // Navegación
     implementation(libs.navigation.compose)
 
-    implementation(libs.androidx.navigation.runtime.android)
-    implementation(libs.androidx.foundation.layout.android)
-
-    // Inyección de Dependencias (Hilt)
+    // Inyección de dependencias (Hilt)
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Firebase (Auth & Firestore)
-    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
-    implementation("com.google.firebase:firebase-auth-ktx")
-    implementation("com.google.firebase:firebase-firestore-ktx")
+    // Firebase (Auth y Firestore): las versiones las fija el BOM
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth.ktx)
+    implementation(libs.firebase.firestore.ktx)
 
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("androidx.test.ext:junit:1.1.5")
+    // Lectura de orientación EXIF de fotos tomadas con la cámara
+    implementation(libs.androidx.exifinterface)
+
+    // Tests unitarios (JVM)
+    testImplementation(libs.junit)
+
+    // Tests instrumentados
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.test:runner:1.5.2")
-
-    implementation("androidx.compose.material:material-icons-extended")
-
-    // Lectura de orientación EXIF de fotos tomadas con la cámara
-    implementation("androidx.exifinterface:exifinterface:1.3.7")
 }

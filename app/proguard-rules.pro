@@ -1,21 +1,18 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
+# Reglas de R8/ProGuard para la build de release.
 #
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# NOTA: ahora mismo la minificación está desactivada (isMinifyEnabled = false en
+# app/build.gradle.kts), así que estas reglas todavía no se aplican. Se dejan
+# preparadas para cuando se active; antes de publicar hay que probar la build de
+# release en un dispositivo (login, crear equipo, asistencia, foto, estadísticas).
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Firestore convierte estos modelos a documentos y viceversa por reflexión
+# (set(objeto) / toObject(Clase::class.java)). Si R8 renombrara sus campos o
+# quitara sus constructores, los datos dejarían de guardarse o de leerse.
+-keep class com.example.entrenamientos.data.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Información que Firestore y Kotlin necesitan en tiempo de ejecución.
+-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Trazas de error legibles en los informes de fallos.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
