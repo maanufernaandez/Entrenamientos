@@ -27,6 +27,7 @@ import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.entrenamientos.logic.CategoryCatalog
 import com.example.entrenamientos.ui.BasketViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -135,21 +136,7 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
     } ?: Color.Black
 
-    val genderStr = when (team?.gender) {
-        "M" -> "Masculino"
-        "F" -> "Femenino"
-        else -> "Mixto"
-    }
-
-    val catSplit = team?.categoryYear?.split(" ") ?: emptyList()
-    val fullCategory = if (catSplit.size >= 2 && (catSplit.last() == "1ª" || catSplit.last() == "2ª")) {
-        val baseCat = catSplit.dropLast(1).joinToString(" ")
-        "$baseCat $genderStr ${catSplit.last()}"
-    } else if (!team?.categoryYear.isNullOrBlank()) {
-        "${team?.categoryYear} $genderStr"
-    } else {
-        genderStr
-    }
+    val fullCategory = CategoryCatalog.displayName(team?.categoryYear, team?.gender)
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

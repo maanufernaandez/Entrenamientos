@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.entrenamientos.data.Attendance
+import com.example.entrenamientos.logic.CategoryCatalog
 import com.example.entrenamientos.ui.BasketViewModel
 
 @Composable
@@ -56,22 +57,8 @@ fun AttendanceScreen(viewModel: BasketViewModel, navController: NavController) {
         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
     } ?: Color.Black
 
-    val genderStr = when (team?.gender) {
-        "M" -> "Masculino"
-        "F" -> "Femenino"
-        else -> "Mixto"
-    }
-
     // Composición estricta: [Categoría] [Género] [División]
-    val catSplit = team?.categoryYear?.split(" ") ?: emptyList()
-    val fullCategory = if (catSplit.size >= 2 && (catSplit.last() == "1ª" || catSplit.last() == "2ª")) {
-        val baseCat = catSplit.dropLast(1).joinToString(" ")
-        "$baseCat $genderStr ${catSplit.last()}"
-    } else if (!team?.categoryYear.isNullOrBlank()) {
-        "${team?.categoryYear} $genderStr"
-    } else {
-        genderStr
-    }
+    val fullCategory = CategoryCatalog.displayName(team?.categoryYear, team?.gender)
 
     androidx.activity.compose.BackHandler {
         navController.popBackStack()

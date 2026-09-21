@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.entrenamientos.logic.CategoryCatalog
 import com.example.entrenamientos.ui.BasketViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,15 +73,10 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
     var showProfileDialog by remember { mutableStateOf(false) }
 
     // Lógica para ordenar los equipos desde Senior hasta Pre-Benjamin 3x3
-    val categoryOrder = listOf(
-        "Senior", "Junior", "Cadete", "Infantil", "Preinfantil",
-        "Minibasket", "PreMinibasket", "Benjamin 5x5", "Benjamin 3x3", "Pre-Benjamin 3x3"
-    )
     val sortedTeamsList = remember(teamsList) {
-        teamsList.sortedWith(compareBy({ team ->
-            val idx = categoryOrder.indexOfFirst { team.categoryYear.startsWith(it) }
-            if (idx == -1) 99 else idx
-        }, { it.name }))
+        teamsList.sortedWith(
+            compareBy({ CategoryCatalog.displayOrder(it.categoryYear) }, { it.name })
+        )
     }
 
     androidx.compose.runtime.LaunchedEffect(sortedTeamsList) {
@@ -313,21 +309,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(sortedTeamsList) { team ->
                             val teamColor = try { Color(android.graphics.Color.parseColor(team.colorHex)) } catch (_: Exception) { Color.Gray }
-                            val genderStr = when (team.gender) {
-                                "M" -> "Masculino"
-                                "F" -> "Femenino"
-                                else -> "Mixto"
-                            }
-
-                            val catSplit = team.categoryYear.split(" ")
-                            val subtitle = if (catSplit.size >= 2 && (catSplit.last() == "1ª" || catSplit.last() == "2ª")) {
-                                val baseCat = catSplit.dropLast(1).joinToString(" ")
-                                "Categoría: $baseCat $genderStr ${catSplit.last()}"
-                            } else if (team.categoryYear.isNotBlank()) {
-                                "Categoría: ${team.categoryYear} $genderStr"
-                            } else {
-                                "Categoría: $genderStr"
-                            }
+                            val subtitle = "Categoría: ${CategoryCatalog.displayName(team.categoryYear, team.gender)}"
 
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(androidx.compose.foundation.layout.IntrinsicSize.Min),
@@ -797,33 +779,16 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
         var eName by remember { mutableStateOf(teamToEdit?.name ?: "") }
         var eShortName by remember { mutableStateOf(teamToEdit?.shortName ?: "") }
 
-        val categories = listOf(
-            "Pre-Benjamin 3x3", "Benjamin 3x3", "Benjamin 5x5",
-            "PreMinibasket", "Minibasket", "Preinfantil",
-            "Infantil", "Cadete", "Junior", "Senior"
-        )
+        val categories = CategoryCatalog.OPTIONS
 
-        var initialCat = categories.first()
-        var initialDiv = "1ª"
-        teamToEdit?.categoryYear?.let { savedCat ->
-            val split = savedCat.split(" ")
-            if (split.size >= 2 && (split.last() == "1ª" || split.last() == "2ª")) {
-                initialDiv = split.last()
-                initialCat = split.dropLast(1).joinToString(" ")
-            } else if (savedCat.isNotBlank()) {
-                initialCat = savedCat
-            }
-        }
-        if (!categories.contains(initialCat)) {
-            initialCat = categories.first()
-        }
+        val (initialCat, initialDiv) = CategoryCatalog.initialSelection(teamToEdit?.categoryYear)
 
         var eCategory by remember { mutableStateOf(initialCat) }
         var eDivision by remember { mutableStateOf(initialDiv) }
         var expandedCategory by remember { mutableStateOf(false) }
         var expandedDivision by remember { mutableStateOf(false) }
 
-        val requiresDivision = eCategory in listOf("PreMinibasket", "Minibasket", "Preinfantil", "Infantil", "Cadete", "Junior", "Senior")
+        val requiresDivision = CategoryCatalog.requiresDivision(eCategory)
 
         var eGender by remember { mutableStateOf(teamToEdit?.gender ?: "M") }
         var eColor by remember { mutableStateOf(teamToEdit?.colorHex ?: "#2196F3") }
@@ -889,7 +854,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                                     expanded = expandedDivision,
                                     onDismissRequest = { expandedDivision = false }
                                 ) {
-                                    listOf("1ª", "2ª").forEach { div ->
+                                    CategoryCatalog.DIVISIONS.forEach { div ->
                                         DropdownMenuItem(
                                             text = { Text(div) },
                                             onClick = {
@@ -959,7 +924,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                         if (eName.isBlank() || eShortName.isBlank()) {
                             android.widget.Toast.makeText(context, "El nombre y la abreviatura son obligatorios", android.widget.Toast.LENGTH_SHORT).show()
                         } else {
-                            val finalCategory = if (requiresDivision) "$eCategory $eDivision" else eCategory
+                            val finalCategory = CategoryCatalog.compose(eCategory, eDivision)
                             if (isEdit) {
                                 viewModel.updateTeamData(teamToEdit!!.year, eName, eShortName, eGender, finalCategory, eColor, eTrackMatches)
                             } else {
