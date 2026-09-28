@@ -17,17 +17,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,7 +45,6 @@ import androidx.navigation.NavController
 import com.example.entrenamientos.logic.MatchResultValidator
 import com.example.entrenamientos.ui.BasketViewModel
 import com.example.entrenamientos.ui.theme.AttendanceGreen
-import com.example.entrenamientos.ui.theme.AttendanceRed
 
 @Composable
 fun ResultadoScreen(
@@ -140,20 +135,13 @@ fun ResultadoScreen(
                 .background(ownTeamColor.copy(alpha = 0.12f))
                 .padding(horizontal = 20.dp, vertical = 20.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                IconButton(onClick = { goToCalendar() }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = ownTeamColor)
-                }
-                Text(
-                    text = "Resultado del partido",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = ownTeamColor
-                )
-            }
+            // Eliminada la flecha de retroceso
+            Text(
+                text = "Resultado del partido",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = ownTeamColor
+            )
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -167,8 +155,9 @@ fun ResultadoScreen(
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                // Cambiado "En casa / Fuera" por "Local / Visitante"
                 Text(
-                    text = "${if (match.isLocal) "En casa" else "Fuera"} · $formattedDate" + if (match.time.isNotBlank()) " · ${match.time}" else "",
+                    text = "${if (match.isLocal) "Local" else "Visitante"} · $formattedDate" + if (match.time.isNotBlank()) " · ${match.time}" else "",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.Gray
                 )
@@ -316,12 +305,13 @@ fun ResultadoScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            OutlinedButton(
+            // Botón Volver en gris oscuro
+            Button(
                 onClick = { goToCalendar() },
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = AttendanceRed)
+                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
             ) {
-                Text("Volver")
+                Text("Volver", color = Color.White)
             }
 
             Button(
@@ -368,10 +358,9 @@ fun ResultadoScreen(
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = AttendanceGreen)
             ) {
-                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.Black)
-                Spacer(modifier = Modifier.width(6.dp))
+                // Eliminado el icono y forzado el texto estático a "Guardar"
                 Text(
-                    text = if (match.resultLocal != null) "Actualizar" else "Guardar",
+                    text = "Guardar",
                     color = Color.Black
                 )
             }

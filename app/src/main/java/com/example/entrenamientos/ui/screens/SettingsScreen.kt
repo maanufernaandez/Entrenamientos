@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -144,7 +145,6 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
     val currentTeamColor = currentTeamObj?.colorHex?.let {
         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Gray }
     } ?: Color.Gray
-    val activeTabColor = currentTeamColor
     val inactiveTabColor = currentTeamColor.copy(alpha = 0.25f)
 
     val jugadorasTitle = "$labelJugadores (${players.size})"
@@ -186,7 +186,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                     modifier = Modifier.size(46.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ExitToApp,
+                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                         contentDescription = "Cerrar sesión",
                         tint = com.example.entrenamientos.ui.theme.AttendanceRed,
                         modifier = Modifier.size(34.dp)
@@ -255,14 +255,14 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                         onClick = { activeTab = "PLANTILLA" },
                         modifier = Modifier.weight(1f),
                         contentPadding = buttonContentPadding,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "PLANTILLA") activeTabColor else inactiveTabColor)
+                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "PLANTILLA") currentTeamColor else inactiveTabColor)
                     ) { Text(jugadorasTitle, color = if (activeTab == "PLANTILLA") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
 
                     Button(
                         onClick = { activeTab = "HORARIOS" },
                         modifier = Modifier.weight(1f),
                         contentPadding = buttonContentPadding,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "HORARIOS") activeTabColor else inactiveTabColor)
+                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "HORARIOS") currentTeamColor else inactiveTabColor)
                     ) { Text(horariosTitle, color = if (activeTab == "HORARIOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
                 }
 
@@ -276,7 +276,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                             contentPadding = buttonContentPadding,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (!trackMatches) Color.LightGray.copy(alpha = 0.5f)
-                                else if (activeTab == "PARTIDOS") activeTabColor
+                                else if (activeTab == "PARTIDOS") currentTeamColor
                                 else inactiveTabColor
                             )
                         ) { Text("Partidos", color = if (!trackMatches) Color.Gray else if (activeTab == "PARTIDOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
@@ -294,7 +294,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                         onClick = { activeTab = "FESTIVOS" },
                         modifier = Modifier.weight(1f),
                         contentPadding = buttonContentPadding,
-                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "FESTIVOS") activeTabColor else inactiveTabColor)
+                        colors = ButtonDefaults.buttonColors(containerColor = if (activeTab == "FESTIVOS") currentTeamColor else inactiveTabColor)
                     ) { Text("Festivos", color = if (activeTab == "FESTIVOS") Color.White else Color.Black, fontSize = sp(13), maxLines = 1) }
                 }
             }
@@ -701,7 +701,10 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                                     android.widget.Toast.makeText(context, "Rellena todos los campos", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
                                     viewModel.updateUserProfile(pName, pLastName, pClub,
-                                        onSuccess = { android.widget.Toast.makeText(context, "Perfil actualizado", android.widget.Toast.LENGTH_SHORT).show() },
+                                        onSuccess = {
+                                            android.widget.Toast.makeText(context, "Perfil actualizado", android.widget.Toast.LENGTH_SHORT).show()
+                                            showProfileDialog = false // Cierra el popup al actualizar el perfil
+                                        },
                                         onError = { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
                                     )
                                 }
@@ -744,8 +747,8 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                             onClick = {
                                 if (oldPass.isBlank() || newPass.isBlank() || confirmPass.isBlank()) {
                                     android.widget.Toast.makeText(context, "Rellena todos los campos", android.widget.Toast.LENGTH_SHORT).show()
-                                } else if (!com.example.entrenamientos.logic.PasswordValidator.isValid(newPass)) {
-                                    android.widget.Toast.makeText(context, com.example.entrenamientos.logic.PasswordValidator.RULES_MESSAGE, android.widget.Toast.LENGTH_LONG).show()
+                                } else if (newPass.length !in 8..20) {
+                                    android.widget.Toast.makeText(context, "La nueva contraseña debe tener entre 8 y 20 caracteres", android.widget.Toast.LENGTH_SHORT).show()
                                 } else if (newPass != confirmPass) {
                                     android.widget.Toast.makeText(context, "Las contraseñas no coinciden", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
@@ -755,6 +758,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                                             oldPass = ""
                                             newPass = ""
                                             confirmPass = ""
+                                            showProfileDialog = false // Cierra el popup al cambiar la contraseña
                                         },
                                         onError = { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
                                     )

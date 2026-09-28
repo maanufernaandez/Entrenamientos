@@ -295,7 +295,7 @@ fun ConvocatoriaScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                         modifier = Modifier.weight(1f),
                         enabled = !isSaving
-                    ) { Text("Volver al Calendario", color = Color.White) }
+                    ) { Text("Volver", color = Color.White) }
 
                     Button(
                         onClick = {

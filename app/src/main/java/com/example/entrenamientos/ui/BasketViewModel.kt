@@ -15,6 +15,7 @@ import com.example.entrenamientos.logic.ScheduleRules
 import com.example.entrenamientos.logic.TrainingDayCalculator
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -147,6 +148,71 @@ class BasketViewModel @Inject constructor(
     // FIREBASE - LISTENERS
     // ============================================================
 
+    /**
+     * Escucha [this] y vuelca su contenido en [target] cada vez que cambia.
+     * Cuatro de los ocho listeners de [startFirebaseListeners] seguían este
+     * mismo patrón (escuchar, convertir cada documento y sustituir la lista);
+     * [onData] permite a los que necesitan algo más (equipos, partidos, festivos)
+     * seguir haciéndolo a su manera.
+     */
+    private fun <T : Any> CollectionReference.syncTo(
+        target: MutableStateFlow<List<T>>,
+        clazz: Class<T>,
+        errorMessage: String,
+        onData: (List<T>) -> Unit = { target.value = it }
+    ): ListenerRegistration =
+        addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e(TAG, errorMessage, error)
+                return@addSnapshotListener
+            }
+            if (snapshot != null) {
+                onData(snapshot.documents.mapNotNull { it.toObject(clazz) })
+            }
+        }
+
+    /**
+     * Escribe [value] en [this] y, si se guarda bien, lo añade o sustituye en
+     * [target] (el criterio de "es el mismo elemento" lo da [matches]).
+     */
+    private fun <T : Any> DocumentReference.saveAndSync(
+        value: T,
+        target: MutableStateFlow<List<T>>,
+        matches: (T) -> Boolean,
+        errorMessage: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        set(value)
+            .addOnSuccessListener {
+                target.value = target.value.filterNot(matches) + value
+                onSuccess()
+            }
+            .addOnFailureListener { error ->
+                Log.e(TAG, errorMessage, error)
+                onError(error.message ?: errorMessage)
+            }
+    }
+
+    /** Borra [this] y, si se borra bien, quita de [target] lo que cumpla [matches]. */
+    private fun <T : Any> DocumentReference.deleteAndSync(
+        target: MutableStateFlow<List<T>>,
+        matches: (T) -> Boolean,
+        errorMessage: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        delete()
+            .addOnSuccessListener {
+                target.value = target.value.filterNot(matches)
+                onSuccess()
+            }
+            .addOnFailureListener { error ->
+                Log.e(TAG, errorMessage, error)
+                onError(error.message ?: errorMessage)
+            }
+    }
+
     private fun startFirebaseListeners(uid: String) {
         listeningUid = uid
         val user = db.collection("users").document(uid)
@@ -200,17 +266,7 @@ class BasketViewModel @Inject constructor(
         // ========================================================
         firebaseListeners +=
             user.collection("schedules")
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        Log.e(TAG, "Error leyendo horarios", error)
-                        return@addSnapshotListener
-                    }
-                    if (snapshot != null) {
-                        _schedules.value = snapshot.documents.mapNotNull { doc ->
-                            doc.toObject(TrainingSchedule::class.java)
-                        }
-                    }
-                }
+                .syncTo(_schedules, TrainingSchedule::class.java, "Error leyendo horarios")
 
         // ========================================================
         // PARTIDOS
@@ -269,51 +325,21 @@ class BasketViewModel @Inject constructor(
         // ========================================================
         firebaseListeners +=
             user.collection("players")
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        Log.e(TAG, "Error leyendo jugadores", error)
-                        return@addSnapshotListener
-                    }
-                    if (snapshot != null) {
-                        _players.value = snapshot.documents.mapNotNull { doc ->
-                            doc.toObject(Player::class.java)
-                        }
-                    }
-                }
+                .syncTo(_players, Player::class.java, "Error leyendo jugadores")
 
         // ========================================================
         // ASISTENCIAS
         // ========================================================
         firebaseListeners +=
             user.collection("attendances")
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        Log.e(TAG, "Error leyendo asistencias", error)
-                        return@addSnapshotListener
-                    }
-                    if (snapshot != null) {
-                        _attendances.value = snapshot.documents.mapNotNull { doc ->
-                            doc.toObject(Attendance::class.java)
-                        }
-                    }
-                }
+                .syncTo(_attendances, Attendance::class.java, "Error leyendo asistencias")
 
         // ========================================================
         // NOTAS / QUINTETOS
         // ========================================================
         firebaseListeners +=
             user.collection("training_notes")
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        Log.e(TAG, "Error leyendo notas", error)
-                        return@addSnapshotListener
-                    }
-                    if (snapshot != null) {
-                        _trainingNotes.value = snapshot.documents.mapNotNull { doc ->
-                            doc.toObject(TrainingNote::class.java)
-                        }
-                    }
-                }
+                .syncTo(_trainingNotes, TrainingNote::class.java, "Error leyendo notas")
     }
 
     private fun removeFirebaseListeners() {
@@ -647,23 +673,7 @@ class BasketViewModel @Inject constructor(
 
         user.collection("players")
             .document(newId.toString())
-            .set(player)
-            .addOnSuccessListener {
-
-                _players.value =
-                    _players.value
-                        .filter {
-                            it.id != newId
-                        } + player
-            }
-            .addOnFailureListener { error ->
-
-                Log.e(
-                    TAG,
-                    "Error guardando jugador",
-                    error
-                )
-            }
+            .saveAndSync(player, _players, { it.id == newId }, "Error guardando jugador")
     }
 
     fun updatePlayer(
@@ -675,26 +685,7 @@ class BasketViewModel @Inject constructor(
 
         user.collection("players")
             .document(player.id.toString())
-            .set(player)
-            .addOnSuccessListener {
-
-                _players.value =
-                    _players.value.map {
-                        if (it.id == player.id) {
-                            player
-                        } else {
-                            it
-                        }
-                    }
-            }
-            .addOnFailureListener { error ->
-
-                Log.e(
-                    TAG,
-                    "Error actualizando jugador",
-                    error
-                )
-            }
+            .saveAndSync(player, _players, { it.id == player.id }, "Error actualizando jugador")
     }
 
     fun deletePlayer(
@@ -1008,22 +999,7 @@ class BasketViewModel @Inject constructor(
 
         user.collection("schedules")
             .document(schedule.id.toString())
-            .delete()
-            .addOnSuccessListener {
-
-                _schedules.value =
-                    _schedules.value.filter {
-                        it.id != schedule.id
-                    }
-            }
-            .addOnFailureListener { error ->
-
-                Log.e(
-                    TAG,
-                    "Error eliminando horario",
-                    error
-                )
-            }
+            .deleteAndSync(_schedules, { it.id == schedule.id }, "Error eliminando horario")
     }
 
     fun addOrUpdateSchedule(newSchedule: TrainingSchedule, onSuccess: () -> Unit, onError: (String) -> Unit) {
@@ -1287,22 +1263,7 @@ class BasketViewModel @Inject constructor(
 
         user.collection("matches")
             .document(match.id.toString())
-            .delete()
-            .addOnSuccessListener {
-
-                _matches.value =
-                    _matches.value.filter {
-                        it.id != match.id
-                    }
-            }
-            .addOnFailureListener { error ->
-
-                Log.e(
-                    TAG,
-                    "Error eliminando partido",
-                    error
-                )
-            }
+            .deleteAndSync(_matches, { it.id == match.id }, "Error eliminando partido")
     }
 
     // ============================================================
@@ -1327,23 +1288,7 @@ class BasketViewModel @Inject constructor(
 
         user.collection("holidays")
             .document(holiday.date)
-            .set(holiday)
-            .addOnSuccessListener {
-
-                _holidays.value =
-                    _holidays.value
-                        .filterNot {
-                            it.date == holiday.date
-                        } + holiday
-            }
-            .addOnFailureListener { error ->
-
-                Log.e(
-                    TAG,
-                    "Error insertando festivo",
-                    error
-                )
-            }
+            .saveAndSync(holiday, _holidays, { it.date == holiday.date }, "Error insertando festivo")
     }
 
     fun addHoliday(
@@ -1364,22 +1309,7 @@ class BasketViewModel @Inject constructor(
 
         user.collection("holidays")
             .document(holiday.date)
-            .delete()
-            .addOnSuccessListener {
-
-                _holidays.value =
-                    _holidays.value.filter {
-                        it.date != holiday.date
-                    }
-            }
-            .addOnFailureListener { error ->
-
-                Log.e(
-                    TAG,
-                    "Error eliminando festivo",
-                    error
-                )
-            }
+            .deleteAndSync(_holidays, { it.date == holiday.date }, "Error eliminando festivo")
     }
 
     // ============================================================

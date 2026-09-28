@@ -8,15 +8,40 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.RotateRight
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,7 +52,6 @@ import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.example.entrenamientos.logic.CategoryCatalog
 import com.example.entrenamientos.ui.BasketViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -136,7 +160,21 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
         try { Color(android.graphics.Color.parseColor(it)) } catch (_: Exception) { Color.Black }
     } ?: Color.Black
 
-    val fullCategory = CategoryCatalog.displayName(team?.categoryYear, team?.gender)
+    val genderStr = when (team?.gender) {
+        "M" -> "Masculino"
+        "F" -> "Femenino"
+        else -> "Mixto"
+    }
+
+    val catSplit = team?.categoryYear?.split(" ") ?: emptyList()
+    val fullCategory = if (catSplit.size >= 2 && (catSplit.last() == "1ª" || catSplit.last() == "2ª")) {
+        val baseCat = catSplit.dropLast(1).joinToString(" ")
+        "$baseCat $genderStr ${catSplit.last()}"
+    } else if (!team?.categoryYear.isNullOrBlank()) {
+        "${team?.categoryYear} $genderStr"
+    } else {
+        genderStr
+    }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -145,7 +183,6 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
     val hasPhoto = !photoBase64.isNullOrBlank()
 
     var isProcessingPhoto by remember { mutableStateOf(false) }
-    var isRotatingPhoto by remember { mutableStateOf(false) }
     var pendingCaptureFile by remember { mutableStateOf<File?>(null) }
     var showPhotoDialog by remember { mutableStateOf(false) }
     var photoError by remember { mutableStateOf<String?>(null) }
@@ -193,7 +230,9 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
                     )
                 }
             }
-        } else capturedFile?.delete()
+        } else if (capturedFile != null) {
+            capturedFile.delete()
+        }
     }
 
     fun launchCamera() {
@@ -201,33 +240,6 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         pendingCaptureFile = file
         takePictureLauncher.launch(uri)
-    }
-
-    fun rotatePhoto() {
-        val currentBase64 = photoBase64 ?: return
-        isRotatingPhoto = true
-
-        scope.launch {
-            val rotated = withContext(Dispatchers.Default) {
-                rotateStoredPhoto(currentBase64, 90f)
-            }
-
-            isRotatingPhoto = false
-
-            if (rotated == null) {
-                photoError = "No se ha podido girar la foto. Inténtalo de nuevo."
-            } else {
-                photoBase64 = rotated
-                viewModel.updateTrainingNotePhoto(
-                    date = dateStr,
-                    teamYear = teamYear,
-                    type = noteType,
-                    photoBase64 = rotated,
-                    existingNote = existingNote,
-                    onError = { msg -> photoError = msg }
-                )
-            }
-        }
     }
 
     fun deletePhoto() {
@@ -243,8 +255,6 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
         showPhotoDialog = false
     }
 
-    // Gestionar el botón "Atrás" del móvil
-    // Si la foto está en grande, la cierra. Si no, vuelve al calendario.
     androidx.activity.compose.BackHandler(enabled = showPhotoDialog) {
         showPhotoDialog = false
     }
@@ -253,12 +263,8 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
         navController.popBackStack()
     }
 
-    // Un Box padre que contiene la pantalla normal y, encima, la previsualización de la foto
     Box(modifier = Modifier.fillMaxSize()) {
 
-        // ------------------------------------------------------------
-        // PANTALLA NORMAL DE NOTAS
-        // ------------------------------------------------------------
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Text(text = titlePrefix, style = MaterialTheme.typography.headlineMedium)
             Text(text = "$dayOfWeek ${date.dayOfMonth} de $monthName", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
@@ -343,10 +349,6 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
             }
         }
 
-        // ------------------------------------------------------------
-        // CAPA SUPERIOR: VISOR DE FOTO A PANTALLA COMPLETA
-        // (Sustituye al problemático Dialog)
-        // ------------------------------------------------------------
         if (showPhotoDialog && hasPhoto) {
             val bitmap = remember(photoBase64) {
                 try {
@@ -357,69 +359,81 @@ fun TrainingNoteScreen(viewModel: BasketViewModel = hiltViewModel(), navControll
                 }
             }
 
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
-                    // Añadimos el inset padding nativo para evitar solapes con notch/barras en teléfonos "edge-to-edge"
-                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = {}
+                    )
             ) {
-                Box(
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
                 ) {
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "Foto del entrenamiento",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Fit
-                        )
-                    } else {
-                        Text("No se ha podido cargar la foto.", color = Color.White)
-                    }
-                }
-
-                // Aquí están los botones. Respetan un margen de 16dp desde abajo, garantizando que no se cortan.
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { showPhotoDialog = false },
-                        enabled = !isRotatingPhoto,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                    ) { Text("Cerrar", color = Color.White) }
-
-                    Button(
-                        onClick = { rotatePhoto() },
-                        enabled = !isRotatingPhoto,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.LinkBlue)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
                     ) {
-                        if (isRotatingPhoto) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Foto del entrenamiento",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                            )
                         } else {
-                            Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Girar", color = Color.White)
+                            Text("No se ha podido cargar la foto.", color = Color.White)
                         }
                     }
 
-                    Button(
-                        onClick = { deletePhoto() },
-                        enabled = !isRotatingPhoto,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                    // Fila inferior dividida en 33% (espacio) - 33% (cerrar) - 33% (eliminar) usando weights
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp)
+                            .padding(top = 16.dp, bottom = 48.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Eliminar", color = Color.White)
+                        Spacer(modifier = Modifier.weight(0.5f))
+
+                        Button(
+                            onClick = { showPhotoDialog = false },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                        ) {
+                            Text(
+                                text = "Cerrar",
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Button(
+                            onClick = { deletePhoto() },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                        ) {
+                            Text(
+                                text = "Eliminar",
+                                color = Color.White,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.weight(0.5f))
                     }
                 }
             }

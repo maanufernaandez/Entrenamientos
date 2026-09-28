@@ -49,43 +49,50 @@ class AuthViewModel @Inject constructor(
     fun login(email: String, pass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         auth.signInWithEmailAndPassword(email, pass)
             .addOnSuccessListener {
-                _isUserLoggedIn.value = true
                 onSuccess()
             }
-            .addOnFailureListener { onError(authErrorMessage(it, "Error al iniciar sesión")) }
+            .addOnFailureListener { e ->
+                onError(e.message ?: "Credenciales incorrectas o error al iniciar sesión.")
+            }
+    }
+
+    private fun isValidEmail(email: String): Boolean {
+        // Comprueba que el formato sea texto@texto.dominio(de 2 a 6 letras)
+        val emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,6}$".toRegex()
+        return email.matches(emailRegex)
     }
 
     fun register(email: String, pass: String, name: String, lastName: String, club: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
-        if (!PasswordValidator.isValid(pass)) {
-            onError(PasswordValidator.RULES_MESSAGE)
+
+        // 1. Comprobación estricta de formato de correo
+        if (!isValidEmail(email)) {
+            onError("El formato del correo electrónico no es válido.")
             return
         }
 
+        // 2. Creación directa (Firebase también verificará que no esté ya registrado)
         auth.createUserWithEmailAndPassword(email, pass)
-            .addOnSuccessListener { result ->
-                val user = result.user
+            .addOnSuccessListener { authResult ->
+                val user = authResult.user
+                val userId = user?.uid ?: return@addOnSuccessListener
 
-                if (user == null) {
-                    onError("No se ha podido completar el registro. Inténtalo de nuevo.")
-                    return@addOnSuccessListener
-                }
-
-                // Guardar datos en Firestore directamente
-                val userProfile = hashMapOf(
+                val userData = mapOf(
                     "name" to name,
                     "lastName" to lastName,
-                    "club" to club,
-                    "email" to email
+                    "club" to club
                 )
 
-                db.collection("users").document(user.uid).set(userProfile)
+                db.collection("users").document(userId).set(userData)
                     .addOnSuccessListener {
-                        _isUserLoggedIn.value = true
                         onSuccess()
                     }
-                    .addOnFailureListener { rollbackRegistration(user, onError) }
+                    .addOnFailureListener { e ->
+                        onError(e.message ?: "Error al guardar los datos del perfil.")
+                    }
             }
-            .addOnFailureListener { onError(authErrorMessage(it, "Error en el registro")) }
+            .addOnFailureListener { e ->
+                onError(e.message ?: "Error al crear la cuenta (es posible que el correo ya esté en uso).")
+            }
     }
 
     /**
