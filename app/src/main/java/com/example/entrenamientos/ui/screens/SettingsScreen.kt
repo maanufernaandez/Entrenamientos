@@ -24,7 +24,6 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
@@ -118,11 +117,34 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
     var showMatchDialog by remember { mutableStateOf(false) }
     var matchStep by remember { mutableIntStateOf(1) }
     var matchToEdit by remember { mutableStateOf<com.example.entrenamientos.data.Match?>(null) }
-    var matchDateInput by remember { mutableStateOf("05-09-2026") }
-    var matchTimeInput by remember { mutableStateOf("10:00") }
-    var matchIsLocalInput by remember { mutableStateOf(true) }
-    var matchLocationInput by remember { mutableStateOf("") }
-    var matchOpponentInput by remember { mutableStateOf("") }
+
+    // Formateo seguro de fecha inicial para la UI (DD-MM-YYYY)
+    val formattedInitialDate = remember(matchToEdit) {
+        matchToEdit?.date?.let { d ->
+            val parts = d.split("-")
+            if (parts.size == 3 && parts[0].length == 4) {
+                "${parts[2]}-${parts[1]}-${parts[0]}"
+            } else {
+                d
+            }
+        } ?: "05-09-2026"
+    }
+
+    var matchIsLocalInput by remember(matchToEdit) {
+        mutableStateOf(matchToEdit?.isLocal ?: true)
+    }
+    var matchDateInput by remember(matchToEdit) {
+        mutableStateOf(formattedInitialDate)
+    }
+    var matchTimeInput by remember(matchToEdit) {
+        mutableStateOf(matchToEdit?.time ?: "10:00")
+    }
+    var matchLocationInput by remember(matchToEdit) {
+        mutableStateOf(matchToEdit?.location ?: "")
+    }
+    var matchOpponentInput by remember(matchToEdit) {
+        mutableStateOf(matchToEdit?.opponent ?: "")
+    }
 
     var teamToDelete by remember { mutableStateOf<com.example.entrenamientos.data.Team?>(null) }
     var playerToDelete by remember { mutableStateOf<com.example.entrenamientos.data.Player?>(null) }
@@ -515,7 +537,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                                 }
                             }
 
-                            // Línea horizontal (queda perfectamente unida a la vertical gracias al padding inferior de las columnas)
+                            // Línea horizontal
                             HorizontalDivider(color = Color.Black)
                             Spacer(modifier = Modifier.height(8.dp))
                             Text("Horarios Semanales:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
@@ -568,7 +590,9 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                     ) { Text(if (availableDaysSettings.isEmpty()) "Todos los días cubiertos" else "Añadir Horario", color = Color.Black, fontSize = sp(14)) }
                 }
                 "PARTIDOS" -> {
-                    val matchesByMonth = teamMatches.groupBy { java.time.YearMonth.from(java.time.LocalDate.parse(it.date)) }
+                    val matchesByMonth = teamMatches.groupBy {
+                        try { java.time.YearMonth.from(java.time.LocalDate.parse(it.date)) } catch (_: Exception) { java.time.YearMonth.now() }
+                    }
                     val sortedMonths = matchesByMonth.toSortedMap(compareByDescending { it })
                     val formatterMonth = java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale("es", "ES"))
                     val activeColor = currentTeamObj?.colorHex?.let {
@@ -596,7 +620,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                                 val sortedMatches = matchesInMonth.sortedByDescending { it.date }
 
                                 items(sortedMatches) { match ->
-                                    val dateObj = java.time.LocalDate.parse(match.date)
+                                    val dateObj = try { java.time.LocalDate.parse(match.date) } catch (_: Exception) { java.time.LocalDate.now() }
                                     val dayOfWeekName = dateObj.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES")).replaceFirstChar { it.uppercase() }
                                     val shortDate = String.format(java.util.Locale.getDefault(), "%02d/%02d", dateObj.dayOfMonth, dateObj.monthValue)
                                     val teamShortName = currentTeamObj?.shortName?.takeIf { it.isNotBlank() } ?: "Local"
@@ -622,8 +646,12 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                                         }
 
                                         Box(modifier = Modifier.width(48.dp).fillMaxHeight().clip(cellShape).background(cellBg), contentAlignment = Alignment.Center) {
-                                            IconButton(onClick = { matchToEdit = match; matchStep = 1; val parts = match.date.split("-"); matchDateInput = "${parts[2]}-${parts[1]}-${parts[0]}"; matchTimeInput = match.time; matchIsLocalInput = match.isLocal; matchLocationInput = match.location; matchOpponentInput = match.opponent; showMatchDialog = true }) {
-                                                Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.DarkGray)
+                                            IconButton(onClick = {
+                                                matchToEdit = match
+                                                matchStep = 1
+                                                showMatchDialog = true
+                                            }) {
+                                                Icon(Icons.Default.Edit, contentDescription = "Editar")
                                             }
                                         }
 
@@ -639,11 +667,17 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
-                        onClick = { matchToEdit = null; matchStep = 1; matchDateInput = "05-09-2026"; matchTimeInput = "10:00"; matchIsLocalInput = true; matchLocationInput = ""; matchOpponentInput = ""; showMatchDialog = true },
+                        onClick = {
+                            matchToEdit = null
+                            matchStep = 1
+                            showMatchDialog = true
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = buttonContentPadding,
                         colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
-                    ) { Text("Añadir Partido", color = Color.Black, fontSize = sp(14)) }
+                    ) {
+                        Text("Añadir Partido", color = Color.Black, fontSize = sp(14))
+                    }
                 }
                 "FESTIVOS" -> {
                     FestivosSettingsTab(viewModel)
@@ -703,7 +737,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                                     viewModel.updateUserProfile(pName, pLastName, pClub,
                                         onSuccess = {
                                             android.widget.Toast.makeText(context, "Perfil actualizado", android.widget.Toast.LENGTH_SHORT).show()
-                                            showProfileDialog = false // Cierra el popup al actualizar el perfil
+                                            showProfileDialog = false
                                         },
                                         onError = { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
                                     )
@@ -758,7 +792,7 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                                             oldPass = ""
                                             newPass = ""
                                             confirmPass = ""
-                                            showProfileDialog = false // Cierra el popup al cambiar la contraseña
+                                            showProfileDialog = false
                                         },
                                         onError = { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
                                     )
@@ -1065,7 +1099,14 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
 
     if (showMatchDialog) {
         val subtitleStep = when(matchStep) { 1 -> "Seleccionar Día"; 2 -> "Seleccionar Hora"; 3 -> "¿Local o Visitante?"; 4 -> "Polideportivo y Equipo Rival"; else -> "" }
-        androidx.compose.ui.window.Dialog(onDismissRequest = { showMatchDialog = false }, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = {
+                showMatchDialog = false
+                matchToEdit = null
+                matchStep = 1
+            },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
             Card(modifier = Modifier.fillMaxWidth(0.98f).padding(8.dp), shape = MaterialTheme.shapes.medium) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(if (matchToEdit == null) "Nuevo Partido" else "Editar Partido", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
@@ -1073,12 +1114,47 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                     Text(subtitleStep, style = MaterialTheme.typography.bodyMedium, color = Color.Gray, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                     Spacer(modifier = Modifier.height(uniformSpacing))
                     when (matchStep) {
-                        1 -> androidx.compose.material3.OutlinedButton(onClick = { val parts = matchDateInput.split("-"); val d = parts.getOrNull(0)?.toIntOrNull() ?: 5; val m = (parts.getOrNull(1)?.toIntOrNull() ?: 9) - 1; val y = parts.getOrNull(2)?.toIntOrNull() ?: 2026; android.app.DatePickerDialog(context, { _, year, month, day -> matchDateInput = String.format(java.util.Locale.getDefault(), "%02d-%02d-%04d", day, month + 1, year) }, y, m, d).show() }, modifier = Modifier.fillMaxWidth()) { Text(matchDateInput, color = Color.Black) }
-                        2 -> androidx.compose.material3.OutlinedButton(onClick = { val parts = matchTimeInput.split(":"); val h = parts.getOrNull(0)?.toIntOrNull() ?: 10; val m = parts.getOrNull(1)?.toIntOrNull() ?: 0; android.app.TimePickerDialog(context, { _, hour, minute -> matchTimeInput = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute) }, h, m, true).show() }, modifier = Modifier.fillMaxWidth()) { Text(matchTimeInput, color = Color.Black) }
+                        1 -> androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                val parts = matchDateInput.split("-")
+                                val d = parts.getOrNull(0)?.toIntOrNull() ?: 5
+                                val m = (parts.getOrNull(1)?.toIntOrNull() ?: 9) - 1
+                                val y = parts.getOrNull(2)?.toIntOrNull() ?: 2026
+
+                                val spanishLocale = java.util.Locale("es", "ES")
+                                java.util.Locale.setDefault(spanishLocale)
+                                val originalLocale = java.util.Locale.getDefault()
+
+                                val dialog = android.app.DatePickerDialog(context, { _, year, month, day ->
+                                    matchDateInput = String.format(java.util.Locale.getDefault(), "%02d-%02d-%04d", day, month + 1, year)
+                                }, y, m, d)
+
+                                dialog.datePicker.firstDayOfWeek = java.util.Calendar.MONDAY
+
+                                dialog.context.resources.configuration.setLocale(spanishLocale)
+
+                                dialog.show()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(matchDateInput, color = Color.Black) }
+
+                        2 -> androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                val parts = matchTimeInput.split(":")
+                                val h = parts.getOrNull(0)?.toIntOrNull() ?: 10
+                                val m = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                                android.app.TimePickerDialog(context, { _, hour, minute ->
+                                    matchTimeInput = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute)
+                                }, h, m, true).show()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(matchTimeInput, color = Color.Black) }
+
                         3 -> Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { matchIsLocalInput = true }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = if (matchIsLocalInput) com.example.entrenamientos.ui.theme.InfantilBlue else Color.LightGray)) { Text("Local", color = if (matchIsLocalInput) Color.White else Color.Black) }
                             Button(onClick = { matchIsLocalInput = false }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = if (!matchIsLocalInput) Color.Red else Color.LightGray)) { Text("Visitante", color = if (!matchIsLocalInput) Color.White else Color.Black) }
                         }
+
                         4 -> {
                             OutlinedTextField(value = matchLocationInput, onValueChange = { matchLocationInput = it }, label = { Text("Polideportivo") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             Spacer(modifier = Modifier.height(uniformSpacing))
@@ -1089,8 +1165,21 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
 
                     if (matchStep == 1) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { showMatchDialog = false }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)) { Text("Cancelar", color = Color.White, fontSize = sp(13), maxLines = 1) }
-                            Button(onClick = { matchStep++ }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)) { Text("Siguiente", color = Color.Black, fontSize = sp(13), maxLines = 1) }
+                            Button(
+                                onClick = {
+                                    showMatchDialog = false
+                                    matchToEdit = null
+                                    matchStep = 1
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                            ) { Text("Cancelar", color = Color.White, fontSize = sp(13), maxLines = 1) }
+
+                            Button(
+                                onClick = { matchStep++ },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                            ) { Text("Siguiente", color = Color.Black, fontSize = sp(13), maxLines = 1) }
                         }
                     } else {
                         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1101,13 +1190,46 @@ fun SettingsScreen(viewModel: BasketViewModel = hiltViewModel(), onLogout: () ->
                                 } else {
                                     Button(
                                         onClick = {
-                                            val parts = matchDateInput.split("-"); val dateForDb = "${parts[2]}-${parts[1]}-${parts[0]}"; val newMatch = com.example.entrenamientos.data.Match(id = matchToEdit?.id ?: 0, date = dateForDb, time = matchTimeInput, isLocal = matchIsLocalInput, location = matchLocationInput, opponent = matchOpponentInput, teamYear = selectedTeam); viewModel.addOrUpdateMatch(newMatch); showMatchDialog = false
+                                            val parts = matchDateInput.split("-")
+                                            val dateForDb = if (parts.size == 3) "${parts[2]}-${parts[1]}-${parts[0]}" else matchDateInput
+
+                                            val updatedMatch = (matchToEdit?.copy(
+                                                date = dateForDb,
+                                                time = matchTimeInput,
+                                                isLocal = matchIsLocalInput,
+                                                location = matchLocationInput,
+                                                opponent = matchOpponentInput,
+                                                teamYear = selectedTeam
+                                            )) ?: com.example.entrenamientos.data.Match(
+                                                id = 0,
+                                                date = dateForDb,
+                                                time = matchTimeInput,
+                                                isLocal = matchIsLocalInput,
+                                                location = matchLocationInput,
+                                                opponent = matchOpponentInput,
+                                                teamYear = selectedTeam
+                                            )
+
+                                            viewModel.addOrUpdateMatch(updatedMatch)
+                                            showMatchDialog = false
+                                            matchToEdit = null
+                                            matchStep = 1
                                         },
-                                        modifier = Modifier.weight(1f), enabled = matchLocationInput.isNotBlank() && matchOpponentInput.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
+                                        modifier = Modifier.weight(1f),
+                                        enabled = matchLocationInput.isNotBlank() && matchOpponentInput.isNotBlank(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceGreen)
                                     ) { Text(if (matchToEdit == null) "Guardar" else "Actualizar", color = Color.Black, fontSize = sp(13), maxLines = 1) }
                                 }
                             }
-                            Button(onClick = { showMatchDialog = false }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)) { Text("Cancelar", color = Color.White, fontSize = sp(13), maxLines = 1) }
+                            Button(
+                                onClick = {
+                                    showMatchDialog = false
+                                    matchToEdit = null
+                                    matchStep = 1
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = com.example.entrenamientos.ui.theme.AttendanceRed)
+                            ) { Text("Cancelar", color = Color.White, fontSize = sp(13), maxLines = 1) }
                         }
                     }
                 }

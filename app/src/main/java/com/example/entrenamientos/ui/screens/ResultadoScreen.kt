@@ -62,7 +62,6 @@ fun ResultadoScreen(
         it.date == selectedDateStr && it.teamYear == teamYear
     }
 
-    // Si por cualquier motivo no existe el partido, volvemos al calendario.
     if (match == null) {
         LaunchedEffect(Unit) {
             navController.navigate("calendar") {
@@ -80,7 +79,9 @@ fun ResultadoScreen(
     val ownTeamName = ownTeam?.shortName?.ifBlank { ownTeam.name } ?: "Tu equipo"
     val opponentName = match.opponent.ifBlank { "Rival" }
 
-    // A la izquierda del marcador siempre va el equipo local, a la derecha el visitante.
+    // POSICIONAMIENTO VISUAL DINÁMICO:
+    // Si somos local: Izquierda = Tu equipo, Derecha = Rival
+    // Si somos visitante: Izquierda = Rival, Derecha = Tu equipo
     val leftName = if (match.isLocal) ownTeamName else opponentName
     val rightName = if (match.isLocal) opponentName else ownTeamName
 
@@ -92,13 +93,15 @@ fun ResultadoScreen(
     } ?: match.date
 
     // ------------------------------------------------------------
-    // DATOS DEL RESULTADO
-    // match.id es la clave del estado local: al cambiar de partido
-    // nunca se arrastran los datos del partido anterior.
+    // CARGA DE DATOS PARA LA PANTALLA:
+    // Mapeamos los campos de la BD a la posición visual izquierda/derecha correspondiente
     // ------------------------------------------------------------
+    val initialLeft = if (match.isLocal) match.resultLocal?.toString() ?: "" else match.resultVisitor?.toString() ?: ""
+    val initialRight = if (match.isLocal) match.resultVisitor?.toString() ?: "" else match.resultLocal?.toString() ?: ""
 
-    var resLocal by remember(match.id) { mutableStateOf(match.resultLocal?.toString() ?: "") }
-    var resVisitor by remember(match.id) { mutableStateOf(match.resultVisitor?.toString() ?: "") }
+    var resLeft by remember(match.id) { mutableStateOf(initialLeft) }
+    var resRight by remember(match.id) { mutableStateOf(initialRight) }
+
     var ftMade by remember(match.id) { mutableStateOf(if (match.ftMade == 0) "" else match.ftMade.toString()) }
     var ftAttempted by remember(match.id) { mutableStateOf(if (match.ftAttempted == 0) "" else match.ftAttempted.toString()) }
     var observaciones by remember(match.id) { mutableStateOf(match.observations ?: "") }
@@ -122,20 +125,15 @@ fun ResultadoScreen(
 
     BackHandler { goToCalendar() }
 
-    // ------------------------------------------------------------
-    // PANTALLA
-    // ------------------------------------------------------------
-
     Column(modifier = Modifier.fillMaxSize()) {
 
-        // --- CABECERA: rival, fecha y sede, con el color del equipo ---
+        // --- CABECERA ---
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(ownTeamColor.copy(alpha = 0.12f))
                 .padding(horizontal = 20.dp, vertical = 20.dp)
         ) {
-            // Eliminada la flecha de retroceso
             Text(
                 text = "Resultado del partido",
                 style = MaterialTheme.typography.titleMedium,
@@ -155,7 +153,6 @@ fun ResultadoScreen(
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
-                // Cambiado "En casa / Fuera" por "Local / Visitante"
                 Text(
                     text = "${if (match.isLocal) "Local" else "Visitante"} · $formattedDate" + if (match.time.isNotBlank()) " · ${match.time}" else "",
                     style = MaterialTheme.typography.bodyMedium,
@@ -173,7 +170,7 @@ fun ResultadoScreen(
         ) {
 
             // --------------------------------------------------------
-            // MARCADOR: el elemento protagonista de la pantalla
+            // MARCADOR
             // --------------------------------------------------------
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -188,8 +185,8 @@ fun ResultadoScreen(
                 ) {
                     ScoreColumn(
                         teamLabel = leftName,
-                        value = resLocal,
-                        onValueChange = { if (it.length <= 3 && it.all(Char::isDigit)) resLocal = it },
+                        value = resLeft,
+                        onValueChange = { if (it.length <= 3 && it.all(Char::isDigit)) resLeft = it },
                         modifier = Modifier.weight(1f)
                     )
 
@@ -202,8 +199,8 @@ fun ResultadoScreen(
 
                     ScoreColumn(
                         teamLabel = rightName,
-                        value = resVisitor,
-                        onValueChange = { if (it.length <= 3 && it.all(Char::isDigit)) resVisitor = it },
+                        value = resRight,
+                        onValueChange = { if (it.length <= 3 && it.all(Char::isDigit)) resRight = it },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -297,7 +294,7 @@ fun ResultadoScreen(
         }
 
         // --------------------------------------------------------
-        // BOTONES (fijos abajo, fuera del scroll)
+        // BOTONES
         // --------------------------------------------------------
         Row(
             modifier = Modifier
@@ -305,7 +302,6 @@ fun ResultadoScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Botón Volver en gris oscuro
             Button(
                 onClick = { goToCalendar() },
                 modifier = Modifier.weight(1f),
@@ -317,8 +313,8 @@ fun ResultadoScreen(
             Button(
                 onClick = {
                     val validationError = MatchResultValidator.validate(
-                        resLocal = resLocal,
-                        resVisitor = resVisitor,
+                        resLocal = if (match.isLocal) resLeft else resRight,
+                        resVisitor = if (match.isLocal) resRight else resLeft,
                         ftMade = ftMade,
                         ftAttempted = ftAttempted
                     )
@@ -332,12 +328,18 @@ fun ResultadoScreen(
                         return@Button
                     }
 
-                    val localScore = resLocal.toIntOrNull()
-                    val visitorScore = resVisitor.toIntOrNull()
+                    val leftScore = resLeft.toIntOrNull()
+                    val rightScore = resRight.toIntOrNull()
+
+                    // GUARDADO INTELIGENTE Y CONSISTENTE:
+                    // Si somos local: Left = resultLocal, Right = resultVisitor
+                    // Si somos visitante: Left = resultVisitor, Right = resultLocal
+                    val finalResultLocal = if (match.isLocal) leftScore else rightScore
+                    val finalResultVisitor = if (match.isLocal) rightScore else leftScore
 
                     val updatedMatch = match.copy(
-                        resultLocal = localScore,
-                        resultVisitor = visitorScore,
+                        resultLocal = finalResultLocal,
+                        resultVisitor = finalResultVisitor,
                         ftMade = ftMade.toIntOrNull() ?: 0,
                         ftAttempted = ftAttempted.toIntOrNull() ?: 0,
                         observations = observaciones
@@ -358,7 +360,6 @@ fun ResultadoScreen(
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = AttendanceGreen)
             ) {
-                // Eliminado el icono y forzado el texto estático a "Guardar"
                 Text(
                     text = "Guardar",
                     color = Color.Black
